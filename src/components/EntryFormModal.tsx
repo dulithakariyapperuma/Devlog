@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import type { SolutionEntry } from "@/data/mockData";
-import { teamMembers } from "@/data/mockData";
+import { useAuth } from "@/context/AuthContext";
 
 const modules = [
   "Backend / Auth-Service",
@@ -29,6 +29,7 @@ interface Props {
 }
 
 export default function EntryFormModal({ entry, open: controlledOpen, onOpenChange, onSubmit, showTrigger }: Props) {
+  const { currentUser } = useAuth();
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -69,7 +70,7 @@ export default function EntryFormModal({ entry, open: controlledOpen, onOpenChan
 
     const result: SolutionEntry = {
       id: entry?.id ?? crypto.randomUUID(),
-      author: entry?.author ?? teamMembers[0],
+      author: entry?.author ?? currentUser!,
       status,
       title: title.trim(),
       module,

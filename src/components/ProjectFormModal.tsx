@@ -6,7 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FolderPlus, Check } from "lucide-react";
-import { teamMembers, type Project } from "@/data/mockData";
+import { type Project } from "@/data/mockData";
+import { useAuth } from "@/context/AuthContext";
 
 const AVATAR_COLORS = [
     "from-violet-500 to-indigo-500",
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function ProjectFormModal({ project, open: controlledOpen, onOpenChange, onSubmit, showTrigger }: Props) {
+    const { allMembers } = useAuth();
     const [internalOpen, setInternalOpen] = useState(false);
     const isControlled = controlledOpen !== undefined;
     const open = isControlled ? controlledOpen : internalOpen;
@@ -65,6 +67,7 @@ export default function ProjectFormModal({ project, open: controlledOpen, onOpen
             endDate: endDate ? new Date(endDate) : undefined,
             entries: project?.entries ?? [],
             memberIds,
+            groupMessages: project?.groupMessages ?? [],
         };
         onSubmit(result);
         setOpen(false);
@@ -111,11 +114,11 @@ export default function ProjectFormModal({ project, open: controlledOpen, onOpen
                         <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                     </div>
 
-                    {/* Team member assignment */}
+                    {/* Team member assignment — uses live DB members */}
                     <div className="space-y-2">
                         <Label>Team Members</Label>
                         <div className="space-y-1.5">
-                            {teamMembers.map((m, i) => {
+                            {allMembers.map((m, i) => {
                                 const selected = memberIds.includes(m.id);
                                 return (
                                     <button
@@ -123,18 +126,18 @@ export default function ProjectFormModal({ project, open: controlledOpen, onOpen
                                         type="button"
                                         onClick={() => toggleMember(m.id)}
                                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${selected
-                                                ? "border-primary/50 bg-primary/5"
-                                                : "border-border hover:border-primary/30 hover:bg-muted/40"
+                                            ? "border-primary/50 bg-primary/5"
+                                            : "border-border hover:border-primary/30 hover:bg-muted/40"
                                             }`}
                                     >
-                                        <div className={`h-7 w-7 rounded-full bg-gradient-to-br ${AVATAR_COLORS[i]} flex items-center justify-center text-[9px] font-bold text-white shrink-0`}>
+                                        <div className={`h-7 w-7 rounded-full bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-[9px] font-bold text-white shrink-0`}>
                                             {m.avatar}
                                         </div>
                                         <div className="flex-1 text-left min-w-0">
                                             <p className="text-sm font-medium text-foreground truncate">{m.name}</p>
                                             <p className="text-[10px] text-muted-foreground">{m.role}</p>
                                         </div>
-                                        <div className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center shrink-0 transition-all ${selected ? "bg-primary border-primary" : "border-border"
+                                        <div className={`h-4 w-4 rounded-md border flex items-center justify-center shrink-0 transition-all ${selected ? "bg-primary border-primary" : "border-border"
                                             }`}>
                                             {selected && <Check className="h-3 w-3 text-primary-foreground" />}
                                         </div>

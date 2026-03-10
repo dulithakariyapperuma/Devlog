@@ -38,7 +38,9 @@ function rowToEntry(
 // ── Projects ──────────────────────────────────────────────────────────────────
 
 export async function getProjects(membersMap: Map<string, TeamMember>): Promise<Project[]> {
-    const { data: rows, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = supabase as any;
+    const { data: rows, error } = await client
         .from("projects")
         .select(`
       *,
@@ -71,7 +73,9 @@ export async function createProject(
     data: { name: string; description: string; status: Project["status"]; startDate: Date; endDate?: Date },
     memberIds: string[]
 ): Promise<Project | null> {
-    const { data: row, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = supabase as any;
+    const { data: row, error } = await client
         .from("projects")
         .insert({
             name: data.name,
@@ -83,11 +87,16 @@ export async function createProject(
         .select()
         .single();
 
-    if (error || !row) { console.error(error); return null; }
+    if (error || !row) {
+        console.error("Create Project Error:", error);
+        window.alert(`Failed to create project: ${error?.message || "Unknown error"}`);
+        return null;
+    }
 
     // Add members
     if (memberIds.length > 0) {
-        await supabase.from("project_members").insert(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from("project_members").insert(
             memberIds.map((mid) => ({ project_id: row.id, member_id: mid }))
         );
     }
@@ -119,14 +128,17 @@ export async function updateProject(
     else if (data.endDate === undefined && "endDate" in data) patch.end_date = null;
 
     if (Object.keys(patch).length > 0) {
-        await supabase.from("projects").update(patch).eq("id", id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from("projects").update(patch).eq("id", id);
     }
 
     // Replace members if provided
     if (memberIds !== undefined) {
-        await supabase.from("project_members").delete().eq("project_id", id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from("project_members").delete().eq("project_id", id);
         if (memberIds.length > 0) {
-            await supabase.from("project_members").insert(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any).from("project_members").insert(
                 memberIds.map((mid) => ({ project_id: id, member_id: mid }))
             );
         }
@@ -134,7 +146,8 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-    await supabase.from("projects").delete().eq("id", id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("projects").delete().eq("id", id);
 }
 
 // ── Solution Entries ──────────────────────────────────────────────────────────
@@ -144,7 +157,9 @@ export async function createEntry(
     authorId: string,
     data: Omit<SolutionEntry, "id" | "author" | "timestamp">
 ): Promise<SolutionEntry | null> {
-    const { data: row, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = supabase as any;
+    const { data: row, error } = await client
         .from("solution_entries")
         .insert({
             project_id: projectId,
@@ -159,7 +174,11 @@ export async function createEntry(
         .select()
         .single();
 
-    if (error || !row) { console.error(error); return null; }
+    if (error || !row) {
+        console.error("Create Entry Error:", error);
+        window.alert(`Failed to create entry: ${error?.message || "Unknown error"}`);
+        return null;
+    }
     // author filled in by caller
     return null; // re-fetch handled by caller
 }
@@ -168,7 +187,8 @@ export async function updateEntry(
     id: string,
     data: Partial<Omit<SolutionEntry, "id" | "author" | "timestamp">>
 ): Promise<void> {
-    await supabase.from("solution_entries").update({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("solution_entries").update({
         status: data.status,
         title: data.title,
         module: data.module,
@@ -179,7 +199,8 @@ export async function updateEntry(
 }
 
 export async function deleteEntry(id: string): Promise<void> {
-    await supabase.from("solution_entries").delete().eq("id", id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("solution_entries").delete().eq("id", id);
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

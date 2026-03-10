@@ -6,6 +6,7 @@ export interface TeamMember {
   role: string;
   email: string;
   password: string; // mock only — never do this in production
+  isAdmin?: boolean;
 }
 
 export interface SolutionEntry {

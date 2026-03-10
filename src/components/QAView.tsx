@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
     Bug, Plus, AlertTriangle, Flame, ChevronDown, ChevronUp,
     CheckCircle2, Clock, XCircle, Eye, Search, Filter,
@@ -7,10 +7,17 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import {
-    initialBugReports, teamMembers, type BugReport,
+    initialBugReports, type BugReport,
     type BugSeverity, type BugPriority, type BugStatus, type Project
 } from "@/data/mockData";
 import { useAuth } from "@/context/AuthContext";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import {
+    getBugReports,
+    createBugReport,
+    updateBugReport,
+    deleteBugReport,
+} from "@/services/bugService";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,19 +62,20 @@ const statusConfig: Record<BugStatus, { label: string; color: string; icon: Reac
     closed: { label: "Closed", color: "bg-muted/60 text-muted-foreground border border-border", icon: <XCircle className="h-3 w-3" /> },
 };
 
-function memberById(id: string) {
-    return teamMembers.find((m) => m.id === id);
+function memberById(id: string, allMembers: ReturnType<typeof useAuth>["allMembers"]) {
+    return allMembers.find((m) => m.id === id);
 }
 
 // ── Bug Form Modal ─────────────────────────────────────────────────────────────
 interface BugFormProps {
     projects: Project[];
+    allMembers: ReturnType<typeof useAuth>["allMembers"];
     onSubmit: (bug: BugReport) => void;
     onClose: () => void;
     reportedById: string;
 }
 
-function BugFormModal({ projects, onSubmit, onClose, reportedById }: BugFormProps) {
+function BugFormModal({ projects, allMembers, onSubmit, onClose, reportedById }: BugFormProps) {
     const [form, setForm] = useState({
         title: "",
         description: "",
@@ -208,7 +216,7 @@ function BugFormModal({ projects, onSubmit, onClose, reportedById }: BugFormProp
                                 onChange={(e) => set("assigneeId", e.target.value)}
                             >
                                 <option value="">Unassigned</option>
-                                {teamMembers.map((m) => (
+                                {allMembers.map((m) => (
                                     <option key={m.id} value={m.id}>{m.name}</option>
                                 ))}
                             </select>
@@ -299,10 +307,11 @@ function BugFormModal({ projects, onSubmit, onClose, reportedById }: BugFormProp
 
 // ── Bug Card ─────────────────────────────────────────────────────────────────
 function BugCard({
-    bug, projects, onStatusChange, onDelete,
+    bug, projects, allMembers, onStatusChange, onDelete,
 }: {
     bug: BugReport;
     projects: Project[];
+    allMembers: ReturnType<typeof useAuth>["allMembers"];
     onStatusChange: (id: string, status: BugStatus) => void;
     onDelete: (id: string) => void;
 }) {
@@ -310,8 +319,8 @@ function BugCard({
     const sev = severityConfig[bug.severity];
     const pri = priorityConfig[bug.priority];
     const sta = statusConfig[bug.status];
-    const reporter = memberById(bug.reportedById);
-    const assignee = bug.assigneeId ? memberById(bug.assigneeId) : null;
+    const reporter = memberById(bug.reportedById, allMembers);
+    const assignee = bug.assigneeId ? memberById(bug.assigneeId, allMembers) : null;
     const project = projects.find((p) => p.id === bug.projectId);
     const avatarColor = AVATAR_COLORS[parseInt(reporter?.id ?? "0") % AVATAR_COLORS.length];
     const assigneeColor = AVATAR_COLORS[parseInt(assignee?.id ?? "0") % AVATAR_COLORS.length];
@@ -468,8 +477,10 @@ function BugCard({
 
 // ── Main QAView ───────────────────────────────────────────────────────────────
 export default function QAView({ projects }: { projects: Project[] }) {
-    const { currentUser } = useAuth();
-    const [bugs, setBugs] = useState<BugReport[]>(initialBugReports);
+    const { currentUser, allMembers } = useAuth();
+    const [bugs, setBugs] = useState<BugReport[]>(
+        isSupabaseConfigured ? [] : initialBugReports
+    );
     const [formOpen, setFormOpen] = useState(false);
     const [searchQ, setSearchQ] = useState("");
     const [filterStatus, setFilterStatus] = useState<BugStatus | "all">("all");
@@ -477,10 +488,47 @@ export default function QAView({ projects }: { projects: Project[] }) {
     const [filterProject, setFilterProject] = useState<string>("all");
     const [sortBy, setSortBy] = useState<"newest" | "severity" | "priority">("newest");
 
-    const handleAdd = (bug: BugReport) => setBugs((p) => [bug, ...p]);
-    const handleStatusChange = (id: string, status: BugStatus) =>
+    // ── Load from Supabase ───────────────────────────────────────────────────
+    useEffect(() => {
+        if (!isSupabaseConfigured) return;
+        getBugReports().then(setBugs);
+    }, []);
+
+    // ── CRUD ─────────────────────────────────────────────────────────────────
+    const handleAdd = async (bug: BugReport) => {
+        if (!isSupabaseConfigured) {
+            setBugs((p) => [bug, ...p]);
+            return;
+        }
+        const saved = await createBugReport({
+            title: bug.title,
+            description: bug.description,
+            stepsToReproduce: bug.stepsToReproduce,
+            expectedBehavior: bug.expectedBehavior,
+            actualBehavior: bug.actualBehavior,
+            severity: bug.severity,
+            priority: bug.priority,
+            status: "open",
+            projectId: bug.projectId,
+            module: bug.module,
+            assigneeId: bug.assigneeId,
+            reportedById: bug.reportedById,
+            screenshotNote: bug.screenshotNote,
+        });
+        if (saved) setBugs((p) => [saved, ...p]);
+    };
+
+    const handleStatusChange = async (id: string, status: BugStatus) => {
         setBugs((p) => p.map((b) => b.id === id ? { ...b, status, updatedAt: new Date() } : b));
-    const handleDelete = (id: string) => setBugs((p) => p.filter((b) => b.id !== id));
+        if (!isSupabaseConfigured) return;
+        await updateBugReport(id, { status });
+    };
+
+    const handleDelete = async (id: string) => {
+        setBugs((p) => p.filter((b) => b.id !== id));
+        if (!isSupabaseConfigured) return;
+        await deleteBugReport(id);
+    };
 
     const filtered = useMemo(() => {
         let list = [...bugs];
@@ -515,6 +563,7 @@ export default function QAView({ projects }: { projects: Project[] }) {
             {formOpen && currentUser && (
                 <BugFormModal
                     projects={projects}
+                    allMembers={allMembers}
                     onSubmit={handleAdd}
                     onClose={() => setFormOpen(false)}
                     reportedById={currentUser.id}
@@ -647,6 +696,7 @@ export default function QAView({ projects }: { projects: Project[] }) {
                             key={bug.id}
                             bug={bug}
                             projects={projects}
+                            allMembers={allMembers}
                             onStatusChange={handleStatusChange}
                             onDelete={handleDelete}
                         />
