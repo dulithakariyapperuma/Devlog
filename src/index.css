@@ -1,0 +1,289 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 150 30% 96%;
+    --foreground: 230 25% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 230 25% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 25% 18%;
+
+    --primary: 235 65% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 60% 95%;
+    --secondary-foreground: 230 25% 18%;
+
+    --muted: 220 20% 94%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 260 50% 94%;
+    --accent-foreground: 260 50% 40%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 90%;
+    --input: 220 20% 90%;
+    --ring: 235 65% 60%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --resolved: 152 60% 48%;
+    --resolved-foreground: 152 60% 15%;
+    --resolved-bg: 152 50% 92%;
+
+    --in-progress: 38 90% 55%;
+    --in-progress-foreground: 38 70% 20%;
+    --in-progress-bg: 38 80% 92%;
+
+    --timeline-line: 250 60% 72%;
+    --timeline-dot: 235 65% 60%;
+
+    --glass-bg: 0 0% 100% / 0.65;
+    --glass-border: 0 0% 100% / 0.5;
+    --glass-shadow: 235 65% 60% / 0.08;
+
+    --code-bg: 240 15% 95%;
+    --code-foreground: 230 20% 30%;
+
+    --gradient-start: 170 50% 92%;
+    --gradient-mid: 260 45% 94%;
+    --gradient-end: 330 40% 94%;
+
+    --sidebar-background: 0 0% 100% / 0.7;
+    --sidebar-foreground: 230 20% 30%;
+    --sidebar-primary: 235 65% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 235 60% 95%;
+    --sidebar-accent-foreground: 235 65% 45%;
+    --sidebar-border: 220 20% 90%;
+    --sidebar-ring: 235 65% 60%;
+
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  .dark {
+    --background: 230 25% 8%;
+    --foreground: 210 30% 92%;
+    --card: 230 20% 12%;
+    --card-foreground: 210 30% 92%;
+    --popover: 230 20% 12%;
+    --popover-foreground: 210 30% 92%;
+    --primary: 235 65% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 230 20% 16%;
+    --secondary-foreground: 210 30% 92%;
+    --muted: 230 15% 18%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 260 30% 20%;
+    --accent-foreground: 260 50% 80%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 230 15% 20%;
+    --input: 230 15% 20%;
+    --ring: 235 65% 65%;
+    --sidebar-background: 230 20% 10%;
+    --sidebar-foreground: 210 30% 85%;
+    --sidebar-primary: 235 65% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 235 30% 18%;
+    --sidebar-accent-foreground: 235 65% 80%;
+    --sidebar-border: 230 15% 20%;
+    --sidebar-ring: 235 65% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background: linear-gradient(135deg,
+        hsl(var(--gradient-start)),
+        hsl(var(--gradient-mid)),
+        hsl(var(--gradient-end)));
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid hsl(var(--glass-border));
+    box-shadow: 0 8px 32px hsl(var(--glass-shadow));
+  }
+
+  .glass-sidebar {
+    background: hsl(var(--sidebar-background));
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid hsl(var(--glass-border));
+  }
+
+  .code-block {
+    background: hsl(var(--code-bg));
+    color: hsl(var(--code-foreground));
+    font-family: var(--font-mono);
+    border-radius: calc(var(--radius) - 4px);
+  }
+
+  /* Fancy dark code block (macOS style) */
+  .code-block-fancy {
+    background: hsl(230 25% 10%);
+    border: 1px solid hsl(230 20% 22%);
+    font-family: var(--font-mono);
+  }
+
+  /* Glowing timeline vertical line */
+  .timeline-glow-line {
+    background: linear-gradient(180deg,
+        transparent,
+        hsl(var(--timeline-line) / 0.5) 8%,
+        hsl(var(--primary)) 30%,
+        hsl(var(--timeline-line)) 70%,
+        hsl(var(--border)) 92%,
+        transparent);
+    filter: drop-shadow(0 0 6px hsl(var(--primary) / 0.45));
+  }
+
+  .timeline-line {
+    background: linear-gradient(180deg,
+        hsl(var(--timeline-line)),
+        hsl(var(--primary)),
+        hsl(var(--timeline-line)));
+  }
+
+  /* Start marker with pulse ring */
+  .timeline-start-marker {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+
+  .timeline-start-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: hsl(var(--primary) / 0.35);
+    animation: ring-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Colored dot on timeline per entry */
+  .timeline-entry-dot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 0.875rem;
+    width: 0.875rem;
+    border-radius: 9999px;
+    border-width: 2.5px;
+    border-style: solid;
+    background: hsl(var(--card));
+    z-index: 10;
+  }
+
+  .dot-resolved {
+    border-color: hsl(var(--resolved));
+    box-shadow: 0 0 10px hsl(var(--resolved) / 0.5), 0 0 20px hsl(var(--resolved) / 0.2);
+  }
+
+  .dot-progress {
+    border-color: hsl(var(--in-progress));
+    box-shadow: 0 0 10px hsl(var(--in-progress) / 0.5), 0 0 20px hsl(var(--in-progress) / 0.2);
+  }
+
+  .timeline-dot-ring {
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    opacity: 0.6;
+    animation: ring-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .ring-resolved {
+    background: hsl(var(--resolved));
+  }
+
+  .ring-progress {
+    background: hsl(var(--in-progress));
+  }
+
+  /* Card colored left accent border */
+  .card-border-accent.accent-resolved {
+    border-left: 3px solid hsl(var(--resolved) / 0.65);
+  }
+
+  .card-border-accent.accent-progress {
+    border-left: 3px solid hsl(var(--in-progress) / 0.65);
+  }
+
+  /* Status badges */
+  .status-resolved {
+    background: hsl(var(--resolved-bg));
+    color: hsl(var(--resolved-foreground));
+  }
+
+  .status-in-progress {
+    background: hsl(var(--in-progress-bg));
+    color: hsl(var(--in-progress-foreground));
+  }
+
+  /* Card entrance animation */
+  .solution-card-animate {
+    animation: cardSlideIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Mobile safe-area bottom padding for iOS home indicator */
+  .safe-bottom {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+@layer base {
+
+  html,
+  body,
+  #root {
+    overflow-x: hidden;
+  }
+}
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ring-ping {
+
+  75%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
