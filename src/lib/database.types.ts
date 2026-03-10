@@ -21,6 +21,7 @@ export interface Database {
                     status: "online" | "away" | "offline";
                     role: string;
                     email: string;
+                    is_admin: boolean;
                     created_at: string;
                 };
                 Insert: {
@@ -30,6 +31,7 @@ export interface Database {
                     status?: "online" | "away" | "offline";
                     role?: string;
                     email: string;
+                    is_admin?: boolean;
                     created_at?: string;
                 };
                 Update: {
@@ -39,6 +41,7 @@ export interface Database {
                     status?: "online" | "away" | "offline";
                     role?: string;
                     email?: string;
+                    is_admin?: boolean;
                     created_at?: string;
                 };
             };
@@ -192,7 +195,12 @@ export interface Database {
             };
         };
         Views: Record<string, never>;
-        Functions: Record<string, never>;
+        Functions: {
+            delete_user: {
+                Args: { user_id: string };
+                Returns: void;
+            };
+        };
         Enums: Record<string, never>;
     };
 }

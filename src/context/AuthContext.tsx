@@ -8,15 +8,17 @@ import {
 } from "react";
 import { teamMembers as initialMembers, type TeamMember } from "@/data/mockData";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { signIn, signOut, getCurrentUser, getAllMembers, updateProfile } from "@/services/authService";
+import { signIn, signUp as signUpService, signOut, getCurrentUser, getAllMembers, updateProfile } from "@/services/authService";
 
 interface AuthContextValue {
     currentUser: TeamMember | null;
     allMembers: TeamMember[];
     isLoading: boolean;
     login: (email: string, password: string) => Promise<{ success: boolean; error: string | null }>;
+    register: (email: string, password: string, name: string) => Promise<{ success: boolean; error: string | null }>;
     logout: () => Promise<void>;
     updateCurrentUser: (patch: Partial<Pick<TeamMember, "name" | "role" | "status">>) => Promise<void>;
+    refreshMembers: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -30,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // ── Bootstrap ────────────────────────────────────────────────
     useEffect(() => {
-        if (!isSupabaseConfigured) return; // mock mode — skip
+        if (!isSupabaseConfigured) return;
 
         let mounted = true;
 
@@ -65,9 +67,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
+    const refreshMembers = useCallback(async () => {
+        if (!isSupabaseConfigured) return;
+        const members = await getAllMembers();
+        setAllMembers(members);
+    }, []);
+
     // ── Login ─────────────────────────────────────────────────────
     const login = useCallback(async (email: string, password: string) => {
-        // ── Mock mode (no Supabase) ─────────────────────────────────
         if (!isSupabaseConfigured) {
             const user = initialMembers.find(
                 (m) => m.email.toLowerCase() === email.toLowerCase() && m.password === password
@@ -78,11 +85,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setAllMembers((prev) => prev.map((m) => (m.id === user.id ? loggedIn : m)));
                 return { success: true, error: null };
             }
-            return { success: false, error: "Invalid email or password. (Mock mode: use pass123)" };
+            return { success: false, error: "Invalid email or password." };
         }
 
-        // ── Supabase mode ────────────────────────────────────────────
         const { user, error } = await signIn(email, password);
+        if (user) {
+            setCurrentUser(user);
+            const members = await getAllMembers();
+            setAllMembers(members);
+            return { success: true, error: null };
+        }
+        return { success: false, error };
+    }, []);
+
+    // ── Register ──────────────────────────────────────────────────
+    const register = useCallback(async (email: string, password: string, name: string) => {
+        if (!isSupabaseConfigured) {
+            return { success: false, error: "Registration requires Supabase to be configured." };
+        }
+
+        const { user, error } = await signUpService(email, password, name);
         if (user) {
             setCurrentUser(user);
             const members = await getAllMembers();
@@ -123,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return (
         <AuthContext.Provider
-            value={{ currentUser, allMembers, isLoading, login, logout, updateCurrentUser }}
+            value={{ currentUser, allMembers, isLoading, login, register, logout, updateCurrentUser, refreshMembers }}
         >
             {children}
         </AuthContext.Provider>

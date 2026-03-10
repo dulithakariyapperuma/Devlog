@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useChat } from "@/context/ChatContext";
-import { Wifi, WifiOff, Clock3, FolderKanban, Pencil, MessageCircle } from "lucide-react";
+import { Wifi, WifiOff, Clock3, FolderKanban, Pencil, MessageCircle, Trash2 } from "lucide-react";
 import type { Project } from "@/data/mockData";
 import EditProfileModal from "./EditProfileModal";
+import { removeMember } from "@/services/adminService";
 
 interface Props {
     projects: Project[];
@@ -25,9 +26,12 @@ const STATUS_CONFIG = {
 };
 
 export default function TeamView({ projects, onViewProject }: Props) {
-    const { currentUser, allMembers } = useAuth();
+    const { currentUser, allMembers, refreshMembers } = useAuth();
     const { openDM } = useChat();
     const [editProfileOpen, setEditProfileOpen] = useState(false);
+    const [removingId, setRemovingId] = useState<string | null>(null);
+
+    const isAdmin = currentUser?.isAdmin === true;
 
     // Map memberId → assigned projects
     const memberProjects = new Map<string, Project[]>();
@@ -149,6 +153,26 @@ export default function TeamView({ projects, onViewProject }: Props) {
                                             Message
                                         </button>
                                     )
+                                )}
+                                {/* Admin: remove user button */}
+                                {isAdmin && !isMe && (
+                                    <button
+                                        disabled={removingId === member.id}
+                                        onClick={async () => {
+                                            if (!confirm(`Remove ${member.name} from DevLog?`)) return;
+                                            setRemovingId(member.id);
+                                            await removeMember(member.id);
+                                            await refreshMembers();
+                                            setRemovingId(null);
+                                        }}
+                                        className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                                        title="Remove user (admin only)"
+                                    >
+                                        {removingId === member.id
+                                            ? <span className="h-3 w-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                            : <Trash2 className="h-3.5 w-3.5" />}
+                                        Remove
+                                    </button>
                                 )}
                             </div>
                         </div>
