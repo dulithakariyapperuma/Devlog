@@ -27,7 +27,6 @@ export default function ProjectsView({ projects, onView, onAdd, onEdit, onDelete
                 </div>
                 <ProjectFormModal onSubmit={onAdd} showTrigger />
             </div>
-
             {projects.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-64 gap-4 text-muted-foreground">
                     <FolderKanban className="h-12 w-12 opacity-30" />

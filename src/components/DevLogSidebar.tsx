@@ -34,7 +34,7 @@ export default function DevLogSidebar({ active, onNavigate, onlineCount, openBug
   return (
     <>
       {/* ── Desktop Sidebar (hidden on mobile) ── */}
-      <aside className="glass-sidebar w-60 shrink-0 hidden md:flex flex-col p-6 h-screen sticky top-0">
+      <aside className="glass-sidebar w-60 shrink-0 hidden md:flex flex-col p-6 h-screen sticky top-0 overflow-y-auto">
         {/* Logo */}
         <div className="flex items-center gap-2 mb-10">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">

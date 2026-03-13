@@ -355,7 +355,7 @@ const Index = () => {
   // ── Loading state ────────────────────────────────────────────────────────────
   if (dataLoading) {
     return (
-      <div className="flex min-h-screen w-full">
+      <div className="flex h-screen w-full overflow-hidden">
         <DevLogSidebar active={activeNav} onNavigate={handleNavigate} onlineCount={0} openBugCount={0} />
         <main className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-4 text-muted-foreground">
@@ -421,7 +421,7 @@ const Index = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-screen w-full overflow-hidden">
       <DevLogSidebar
         active={activeNav}
         onNavigate={handleNavigate}
