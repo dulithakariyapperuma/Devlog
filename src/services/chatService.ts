@@ -11,17 +11,17 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 export async function getChatMessages(projectId: string): Promise<ChatMessage[]> {
     const { data, error } = await supabase
         .from("chat_messages")
-        .select("id, author_id, text, created_at")
+        .select("*")
         .eq("project_id", projectId)
         .order("created_at", { ascending: true });
 
     if (error || !data) return [];
 
-    return data.map((row) => ({
-        id: row.id,
-        authorId: row.author_id,
-        text: row.text,
-        timestamp: new Date(row.created_at),
+    return (data as any[]).map((row) => ({
+        id: row.id as string,
+        authorId: row.author_id as string,
+        text: row.text as string,
+        timestamp: new Date(row.created_at as string),
     }));
 }
 
@@ -32,19 +32,22 @@ export async function sendChatMessage(
     authorId: string,
     text: string
 ): Promise<ChatMessage | null> {
+    const insertPayload: any = { project_id: projectId, author_id: authorId, text };
+
     const { data, error } = await supabase
         .from("chat_messages")
-        .insert({ project_id: projectId, author_id: authorId, text })
-        .select("id, author_id, text, created_at")
+        .insert(insertPayload as never)
+        .select("*")
         .single();
 
     if (error || !data) { console.error(error); return null; }
 
+    const row = data as any;
     return {
-        id: data.id,
-        authorId: data.author_id,
-        text: data.text,
-        timestamp: new Date(data.created_at),
+        id: row.id as string,
+        authorId: row.author_id as string,
+        text: row.text as string,
+        timestamp: new Date(row.created_at as string),
     };
 }
 

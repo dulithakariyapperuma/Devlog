@@ -58,23 +58,25 @@ export async function getBugReports(): Promise<BugReport[]> {
 export async function createBugReport(
     bug: Omit<BugReport, "id" | "timestamp" | "updatedAt">
 ): Promise<BugReport | null> {
+    const insertPayload: any = {
+        title: bug.title,
+        description: bug.description,
+        steps_to_reproduce: bug.stepsToReproduce ?? null,
+        expected_behavior: bug.expectedBehavior ?? null,
+        actual_behavior: bug.actualBehavior ?? null,
+        severity: bug.severity,
+        priority: bug.priority,
+        status: bug.status,
+        project_id: bug.projectId,
+        module: bug.module,
+        assignee_id: bug.assigneeId ?? null,
+        reported_by_id: bug.reportedById,
+        screenshot_note: bug.screenshotNote ?? null,
+    };
+
     const { data, error } = await supabase
         .from("bug_reports")
-        .insert({
-            title: bug.title,
-            description: bug.description,
-            steps_to_reproduce: bug.stepsToReproduce ?? null,
-            expected_behavior: bug.expectedBehavior ?? null,
-            actual_behavior: bug.actualBehavior ?? null,
-            severity: bug.severity,
-            priority: bug.priority,
-            status: bug.status,
-            project_id: bug.projectId,
-            module: bug.module,
-            assignee_id: bug.assigneeId ?? null,
-            reported_by_id: bug.reportedById,
-            screenshot_note: bug.screenshotNote ?? null,
-        })
+        .insert(insertPayload as never)
         .select()
         .single();
 
@@ -86,19 +88,20 @@ export async function updateBugReport(
     id: string,
     patch: Partial<Omit<BugReport, "id" | "timestamp">>
 ): Promise<void> {
-    const { error } = await supabase.from("bug_reports").update({
-        title: patch.title,
-        description: patch.description,
-        steps_to_reproduce: patch.stepsToReproduce ?? null,
-        expected_behavior: patch.expectedBehavior ?? null,
-        actual_behavior: patch.actualBehavior ?? null,
-        severity: patch.severity,
-        priority: patch.priority,
-        status: patch.status,
-        module: patch.module,
-        assignee_id: patch.assigneeId ?? null,
-        screenshot_note: patch.screenshotNote ?? null,
-    }).eq("id", id);
+    const updatePayload: any = {};
+    if (patch.title !== undefined) updatePayload.title = patch.title;
+    if (patch.description !== undefined) updatePayload.description = patch.description;
+    if (patch.stepsToReproduce !== undefined) updatePayload.steps_to_reproduce = patch.stepsToReproduce;
+    if (patch.expectedBehavior !== undefined) updatePayload.expected_behavior = patch.expectedBehavior;
+    if (patch.actualBehavior !== undefined) updatePayload.actual_behavior = patch.actualBehavior;
+    if (patch.severity !== undefined) updatePayload.severity = patch.severity;
+    if (patch.priority !== undefined) updatePayload.priority = patch.priority;
+    if (patch.status !== undefined) updatePayload.status = patch.status;
+    if (patch.module !== undefined) updatePayload.module = patch.module;
+    if (patch.assigneeId !== undefined) updatePayload.assignee_id = patch.assigneeId;
+    if (patch.screenshotNote !== undefined) updatePayload.screenshot_note = patch.screenshotNote;
+
+    const { error } = await supabase.from("bug_reports").update(updatePayload as never).eq("id", id);
 
     if (error) console.error(error);
 }

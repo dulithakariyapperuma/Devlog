@@ -87,11 +87,13 @@ export async function createProject(
         .select()
         .single();
 
+        
     if (error || !row) {
         console.error("Create Project Error:", error);
         window.alert(`Failed to create project: ${error?.message || "Unknown error"}`);
         return null;
     }
+
 
     // Add members
     if (memberIds.length > 0) {
@@ -114,6 +116,8 @@ export async function createProject(
     };
 }
 
+
+
 export async function updateProject(
     id: string,
     data: Partial<{ name: string; description: string; status: Project["status"]; startDate: Date; endDate?: Date }>,
@@ -127,10 +131,13 @@ export async function updateProject(
     if (data.endDate !== undefined) patch.end_date = data.endDate.toISOString().split("T")[0];
     else if (data.endDate === undefined && "endDate" in data) patch.end_date = null;
 
+
+
     if (Object.keys(patch).length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from("projects").update(patch).eq("id", id);
     }
+
 
     // Replace members if provided
     if (memberIds !== undefined) {

@@ -69,7 +69,7 @@ export default function FloatingChatManager({ projects }: Props) {
                             key={`group-${gc.projectId}`}
                             title={project.name}
                             subtitle="Project Chat"
-                            avatarText={<Users className="h-3.5 w-3.5 text-white" /> as unknown as string}
+                            avatarText={project.name.slice(0, 2).toUpperCase()}
                             avatarColor={AVATAR_COLORS[colorIdx]}
                             messages={gc.messages}
                             allMembers={allMembers}
