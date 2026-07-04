@@ -9,6 +9,7 @@ import SearchView from "@/components/SearchView";
 import TeamView from "@/components/TeamView";
 import FloatingChatManager from "@/components/FloatingChatManager";
 import QAView from "@/components/QAView";
+import KnowledgeLinksView from "@/components/KnowledgeLinksView";
 import {
   initialProjects,
   initialBugReports,
@@ -37,7 +38,7 @@ import {
 import { getBugReports } from "@/services/bugService";
 import { subscribeToProjectEntries } from "@/services/chatService";
 
-type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa";
+type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa" | "knowledge";
 
 const Index = () => {
   const { currentUser, allMembers } = useAuth();
@@ -415,6 +416,11 @@ const Index = () => {
     if (activeNav === "qa") return (
       <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-y-auto pt-[4.5rem] md:pt-8 pb-24 md:pb-8">
         <QAView projects={projects} />
+      </main>
+    );
+    if (activeNav === "knowledge") return (
+      <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-y-auto pt-[4.5rem] md:pt-8 pb-24 md:pb-8">
+        <KnowledgeLinksView />
       </main>
     );
     return <main className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Coming soon.</main>;

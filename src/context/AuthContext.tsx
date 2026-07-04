@@ -37,12 +37,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let mounted = true;
 
         async function init() {
-            const user = await getCurrentUser();
-            const members = await getAllMembers();
-            if (mounted) {
-                setCurrentUser(user);
-                setAllMembers(members);
-                setIsLoading(false);
+            try {
+                const user = await getCurrentUser();
+                const members = await getAllMembers();
+                if (mounted) {
+                    setCurrentUser(user);
+                    setAllMembers(members);
+                }
+            } catch (err) {
+                console.error("[AuthContext] Error during initialization:", err);
+            } finally {
+                if (mounted) {
+                    setIsLoading(false);
+                }
             }
         }
 

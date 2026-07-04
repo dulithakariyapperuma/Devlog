@@ -193,6 +193,35 @@ export interface Database {
                     text?: string;
                 };
             };
+            knowledge_links: {
+                Row: {
+                    id: string;
+                    title: string;
+                    url: string;
+                    description: string | null;
+                    type: "google_sheet" | "google_doc" | "word_doc" | "pdf" | "other";
+                    category: string;
+                    added_by_id: string;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    title: string;
+                    url: string;
+                    description?: string | null;
+                    type?: "google_sheet" | "google_doc" | "word_doc" | "pdf" | "other";
+                    category?: string;
+                    added_by_id: string;
+                    created_at?: string;
+                };
+                Update: {
+                    title?: string;
+                    url?: string;
+                    description?: string | null;
+                    type?: "google_sheet" | "google_doc" | "word_doc" | "pdf" | "other";
+                    category?: string;
+                };
+            };
         };
         Views: Record<string, never>;
         Functions: {

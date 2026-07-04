@@ -1,0 +1,195 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Devlog Live Feed — Prisma Schema
+// Multi-team knowledge sharing platform
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Role Enum ────────────────────────────────────────────────────────────────
+enum Role {
+  SUPER_ADMIN  // Global: can manage all teams
+  TEAM_LEADER  // Per-team: can manage members & projects
+  MEMBER       // Per-team: standard member
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+// Replaces Supabase profiles table.
+// A user can be in many teams with different roles.
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  avatar       String?                              // 2-letter initials, e.g. "DK"
+  globalRole   Role?    @map("global_role")         // Only set for SUPER_ADMIN; null = regular user
+
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  memberships    TeamMembership[]
+  projectMembers ProjectMember[]
+  entries        SolutionEntry[]
+  assignedBugs   BugReport[]      @relation("assignee")
+  reportedBugs   BugReport[]      @relation("reporter")
+  knowledgeLinks KnowledgeLink[]
+  messages       ChatMessage[]
+
+  @@map("users")
+}
+
+// ── Teams ─────────────────────────────────────────────────────────────────────
+// Each intern cohort / company department = one Team.
+// A team leader self-registers and creates their team.
+model Team {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique                      // URL-friendly, e.g. "intern-batch-2025"
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  memberships    TeamMembership[]
+  projects       Project[]
+  knowledgeLinks KnowledgeLink[]
+
+  @@map("teams")
+}
+
+// ── Team Memberships ──────────────────────────────────────────────────────────
+// Junction: which user belongs to which team, and at what role.
+// One user can be TEAM_LEADER of one team and MEMBER of another.
+model TeamMembership {
+  id       String   @id @default(uuid())
+  teamId   String   @map("team_id")
+  userId   String   @map("user_id")
+  role     Role     @default(MEMBER)
+  status   String   @default("online")             // "online" | "away" | "offline"
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  team     Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])                       // One membership per user per team
+  @@map("team_memberships")
+}
+
+// ── Projects ──────────────────────────────────────────────────────────────────
+// Projects belong to a team. Only team members can see them.
+model Project {
+  id          String    @id @default(uuid())
+  teamId      String    @map("team_id")
+  name        String
+  description String?
+  status      String    @default("active")         // "active" | "completed"
+  startDate   DateTime  @map("start_date")         @db.Date
+  endDate     DateTime? @map("end_date")           @db.Date
+  createdAt   DateTime  @default(now())            @map("created_at")
+
+  team        Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members     ProjectMember[]
+  entries     SolutionEntry[]
+  bugs        BugReport[]
+  messages    ChatMessage[]
+
+  @@map("projects")
+}
+
+// ── Project Members ───────────────────────────────────────────────────────────
+// Which team members are assigned to which project.
+model ProjectMember {
+  projectId String @map("project_id")
+  memberId  String @map("member_id")
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [memberId],  references: [id], onDelete: Cascade)
+
+  @@id([projectId, memberId])
+  @@map("project_members")
+}
+
+// ── Solution Entries ──────────────────────────────────────────────────────────
+// The core "DevLog" entries — knowledge sharing records.
+model SolutionEntry {
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  authorId     String?  @map("author_id")
+  status       String   @default("in-progress")   // "resolved" | "in-progress"
+  title        String
+  module       String
+  errorMessage String?  @map("error_message")
+  explanation  String
+  codeSnippet  String?  @map("code_snippet")
+  createdAt    DateTime @default(now())            @map("created_at")
+
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author       User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@map("solution_entries")
+}
+
+// ── Bug Reports ───────────────────────────────────────────────────────────────
+model BugReport {
+  id               String   @id @default(uuid())
+  projectId        String   @map("project_id")
+  title            String
+  description      String?
+  stepsToReproduce String?  @map("steps_to_reproduce")
+  expectedBehavior String?  @map("expected_behavior")
+  actualBehavior   String?  @map("actual_behavior")
+  severity         String                          // "critical" | "high" | "medium" | "low"
+  priority         String                          // "urgent" | "high" | "normal" | "low"
+  status           String   @default("open")       // "open" | "in-review" | "resolved" | "closed"
+  module           String
+  assigneeId       String?  @map("assignee_id")
+  reportedById     String?  @map("reported_by_id")
+  screenshotNote   String?  @map("screenshot_note")
+  createdAt        DateTime @default(now())        @map("created_at")
+  updatedAt        DateTime @updatedAt             @map("updated_at")
+
+  project          Project @relation(fields: [projectId],    references: [id], onDelete: Cascade)
+  assignee         User?   @relation("assignee", fields: [assigneeId],   references: [id], onDelete: SetNull)
+  reporter         User?   @relation("reporter", fields: [reportedById], references: [id], onDelete: SetNull)
+
+  @@map("bug_reports")
+}
+
+// ── Knowledge Links ───────────────────────────────────────────────────────────
+// Embedded Google Docs / Sheets / Word / PDF links — no file storage needed!
+model KnowledgeLink {
+  id          String   @id @default(uuid())
+  teamId      String   @map("team_id")
+  title       String
+  url         String
+  description String?
+  type        String   @default("other")           // "google_sheet" | "google_doc" | "word_doc" | "pdf" | "other"
+  category    String   @default("General")
+  addedById   String?  @map("added_by_id")
+  createdAt   DateTime @default(now())             @map("created_at")
+
+  team        Team  @relation(fields: [teamId],    references: [id], onDelete: Cascade)
+  addedBy     User? @relation(fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@map("knowledge_links")
+}
+
+// ── Chat Messages ─────────────────────────────────────────────────────────────
+// Per-project group chat messages.
+model ChatMessage {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  authorId  String?  @map("author_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User?   @relation(fields: [authorId],  references: [id], onDelete: SetNull)
+
+  @@map("chat_messages")
+}

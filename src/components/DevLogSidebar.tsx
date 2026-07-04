@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
-import { Rss, FileCode2, Search, Users, Terminal, FolderKanban, LogOut, Bug } from "lucide-react";
+import { Rss, FileCode2, Search, Users, Terminal, FolderKanban, LogOut, Bug, BookOpen } from "lucide-react";
 
-type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa";
+type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa" | "knowledge";
 
 interface Props {
   active: NavItem;
@@ -17,6 +17,7 @@ const navItems: { id: NavItem; label: string; icon: typeof Rss }[] = [
   { id: "search", label: "Search", icon: Search },
   { id: "team", label: "Team", icon: Users },
   { id: "qa", label: "QA Bugs", icon: Bug },
+  { id: "knowledge", label: "Knowledge", icon: BookOpen },
 ];
 
 const AVATAR_COLORS = [

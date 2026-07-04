@@ -11,6 +11,10 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+import { AdminProtectedRoute } from "./components/admin/AdminProtectedRoute";
+import { AdminLayout } from "./components/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+
 function AppRoutes() {
   const { currentUser, isLoading } = useAuth();
 
@@ -31,6 +35,14 @@ function AppRoutes() {
     <ChatProvider>
       <Routes>
         <Route path="/" element={<Index />} />
+        
+        {/* Admin Routes */}
+        <Route path="/admin" element={<AdminProtectedRoute />}>
+          <Route element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            {/* Future admin routes will go here */}
+          </Route>
+        </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
     </ChatProvider>
