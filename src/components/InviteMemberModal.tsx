@@ -7,7 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, Loader2 } from "lucide-react";
+import { Copy, Check, Loader2, Mail } from "lucide-react";
 import { generateInvite } from "@/services/inviteService";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -78,7 +78,7 @@ export default function InviteMemberModal({ open, onOpenChange }: Props) {
 
           {!inviteLink ? (
             <Button
-              className="w-full"
+              className="w-full bg-gradient-to-r from-primary to-primary/80 hover:scale-[1.02] transition-transform shadow-lg shadow-primary/20"
               onClick={handleGenerate}
               disabled={loading || !activeTeamId}
             >
@@ -86,28 +86,45 @@ export default function InviteMemberModal({ open, onOpenChange }: Props) {
               Generate Invite Link
             </Button>
           ) : (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Invite Link (Single-use)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={inviteLink}
-                  className="flex-1 h-10 px-3 rounded-lg border border-border bg-muted/50 text-sm font-mono text-muted-foreground outline-none"
-                />
-                <Button size="icon" variant="outline" onClick={handleCopy}>
-                  {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Invite Link (Single-use)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={inviteLink}
+                    className="flex-1 h-10 px-3 rounded-lg border border-border bg-muted/50 text-sm font-mono text-muted-foreground outline-none"
+                  />
+                  <Button size="icon" variant="outline" onClick={handleCopy}>
+                    {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  This link will expire in 7 days and can only be used once.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+                <Button 
+                  className="w-full gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:scale-[1.02] transition-transform text-white shadow-lg shadow-blue-500/20"
+                  onClick={() => {
+                    const subject = encodeURIComponent("Join our team on DevLog");
+                    const body = encodeURIComponent(`You've been invited to join our team on DevLog!\n\nClick the link below to create your account and join the workspace:\n${inviteLink}\n\nNote: This is a single-use link and will expire in 7 days.`);
+                    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                  }}
+                >
+                  <Mail className="h-4 w-4" />
+                  Send via Email
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  className="w-full text-xs text-muted-foreground"
+                  onClick={() => setInviteLink(null)}
+                >
+                  Generate another link
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                This link will expire in 7 days and can only be used once.
-              </p>
-              <Button
-                variant="ghost"
-                className="w-full mt-2 text-xs text-muted-foreground"
-                onClick={() => setInviteLink(null)}
-              >
-                Generate another link
-              </Button>
             </div>
           )}
         </div>

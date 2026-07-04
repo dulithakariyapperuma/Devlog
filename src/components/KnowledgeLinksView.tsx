@@ -16,30 +16,68 @@ import {
   AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// ── Brand Icons ───────────────────────────────────────────────────────────────
+
+const BrandGoogleDoc = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 48 48" className={className}>
+    <path fill="#4285F4" d="M11,44h26c2.2,0,4-1.8,4-4V16L27,2H11C8.8,2,7,3.8,7,6v34C7,42.2,8.8,44,11,44z"/>
+    <path fill="#90CAF9" d="M27,2v14h14L27,2z"/>
+    <rect x="15" y="25" width="18" height="2" fill="#FFFFFF"/>
+    <rect x="15" y="31" width="18" height="2" fill="#FFFFFF"/>
+    <rect x="15" y="37" width="13" height="2" fill="#FFFFFF"/>
+  </svg>
+);
+
+const BrandGoogleSheet = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 48 48" className={className}>
+    <path fill="#0F9D58" d="M11,44h26c2.2,0,4-1.8,4-4V16L27,2H11C8.8,2,7,3.8,7,6v34C7,42.2,8.8,44,11,44z"/>
+    <path fill="#A5D6A7" d="M27,2v14h14L27,2z"/>
+    <rect x="15" y="23" width="18" height="12" fill="#FFFFFF"/>
+    <rect x="23" y="23" width="2" height="12" fill="#0F9D58"/>
+    <rect x="15" y="28" width="18" height="2" fill="#0F9D58"/>
+  </svg>
+);
+
+const BrandWord = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 48 48" className={className}>
+    <path fill="#2B579A" d="M11,44h26c2.2,0,4-1.8,4-4V16L27,2H11C8.8,2,7,3.8,7,6v34C7,42.2,8.8,44,11,44z"/>
+    <path fill="#90CAF9" d="M27,2v14h14L27,2z"/>
+    <path fill="#FFFFFF" d="M16,35h4l2-8l2,8h4l3-12h-3l-2,8l-2-8h-4l-2,8l-2-8h-3L16,35z"/>
+  </svg>
+);
+
+const BrandPdf = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 48 48" className={className}>
+    <path fill="#E53935" d="M11,44h26c2.2,0,4-1.8,4-4V16L27,2H11C8.8,2,7,3.8,7,6v34C7,42.2,8.8,44,11,44z"/>
+    <path fill="#EF9A9A" d="M27,2v14h14L27,2z"/>
+    <text x="14" y="33" fill="#FFFFFF" fontFamily="sans-serif" fontSize="12" fontWeight="bold">PDF</text>
+  </svg>
+);
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const LINK_TYPE_META: Record<LinkType, { label: string; Icon: typeof FileSpreadsheet; colorClass: string; bgClass: string }> = {
+const LINK_TYPE_META: Record<LinkType, { label: string; Icon: any; colorClass: string; bgClass: string }> = {
   google_sheet: {
     label: "Google Sheet",
-    Icon: FileSpreadsheet,
+    Icon: BrandGoogleSheet,
     colorClass: "text-emerald-500",
     bgClass: "bg-emerald-500/10 border-emerald-500/20",
   },
   google_doc: {
     label: "Google Doc",
-    Icon: FileText,
+    Icon: BrandGoogleDoc,
     colorClass: "text-blue-500",
     bgClass: "bg-blue-500/10 border-blue-500/20",
   },
   word_doc: {
     label: "Word Document",
-    Icon: FileType2,
+    Icon: BrandWord,
     colorClass: "text-indigo-500",
     bgClass: "bg-indigo-500/10 border-indigo-500/20",
   },
   pdf: {
     label: "PDF",
-    Icon: FileText,
+    Icon: BrandPdf,
     colorClass: "text-rose-500",
     bgClass: "bg-rose-500/10 border-rose-500/20",
   },
@@ -288,7 +326,7 @@ function LinkCard({ link, currentUserId, onEdit, onDelete }: LinkCardProps) {
       <div className="flex items-start gap-3">
         {/* Icon */}
         <div className={`shrink-0 h-10 w-10 rounded-xl border flex items-center justify-center ${meta.bgClass}`}>
-          <Icon className={`h-5 w-5 ${meta.colorClass}`} />
+          <Icon className="h-5 w-5" />
         </div>
         {/* Title & type */}
         <div className="flex-1 min-w-0">

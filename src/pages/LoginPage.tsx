@@ -62,7 +62,7 @@ export default function LoginPage() {
     const previewInitials = name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 
     return (
-        <div className="min-h-screen flex">
+        <div className="h-screen flex overflow-hidden">
             {/* ── Left panel — branding ────────────────────────────── */}
             <div className="hidden lg:flex flex-col justify-between w-1/2 bg-gradient-to-br from-primary/90 via-primary to-indigo-700 p-12">
                 <div className="flex items-center gap-3">
@@ -90,8 +90,15 @@ export default function LoginPage() {
             </div>
 
             {/* ── Right panel — form ───────────────────────────────── */}
-            <div className="flex-1 flex items-center justify-center p-8 bg-background">
-                <div className="w-full max-w-sm">
+            <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative bg-background">
+                {/* Simple subtle dot grid background for signup only */}
+                {!isLogin && (
+                    <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.15] dark:opacity-10" 
+                        style={{ backgroundImage: "radial-gradient(currentColor 1px, transparent 1px)", backgroundSize: "24px 24px" }} 
+                    />
+                )}
+                
+                <div className="w-full max-w-sm py-8 relative z-10">
                     {/* Mobile logo */}
                     <div className="flex lg:hidden items-center gap-2 mb-8 justify-center">
                         <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -137,14 +144,6 @@ export default function LoginPage() {
                         )}
                     </div>
 
-                    {/* Signup avatar preview */}
-                    {!isLogin && (
-                        <div className="flex justify-center mb-4">
-                            <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${AVATAR_COLORS[0]} flex items-center justify-center text-lg font-bold text-white shadow-lg transition-all`}>
-                                {previewInitials ? previewInitials : <Terminal className="h-6 w-6 text-white/90" />}
-                            </div>
-                        </div>
-                    )}
 
                     {/* Error */}
                     {error && (

@@ -42,3 +42,23 @@ export async function deleteTeam(teamId: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function getTeamMembers(teamId: string): Promise<any[]> {
+  try {
+    const { data } = await api.get(`/teams/${teamId}/members`);
+    return data;
+  } catch (err) {
+    console.error("Failed to fetch team members:", err);
+    return [];
+  }
+}
+
+export async function removeTeamMember(teamId: string, userId: string): Promise<boolean> {
+  try {
+    await api.delete(`/teams/${teamId}/members/${userId}`);
+    return true;
+  } catch (err) {
+    console.error("Failed to remove team member:", err);
+    return false;
+  }
+}
