@@ -7,10 +7,12 @@
  * Provides:
  *  - currentUser      — logged-in user (null if not logged in)
  *  - activeTeamId     — which team the user is currently viewing
+ *  - activeOrgId      — which org the user is currently viewing
  *  - allMembers       — all members in the active team
  *  - isLoading        — true while checking existing session on mount
  *  - login / register / registerAsLeader / logout
  *  - switchTeam       — switch between teams the user belongs to
+ *  - switchOrg        — switch between orgs the user belongs to
  */
 import {
   createContext,
@@ -44,7 +46,9 @@ import {
 interface AuthContextValue {
   currentUser: AuthUser | null;
   allMembers: TeamMember[];
+  activeOrgId: string | null;
   activeTeamId: string | null;
+  myOrgs: import('@/services/authService').OrgInfo[];
   myTeams: TeamInfo[];
   isLoading: boolean;
   login: (
@@ -54,7 +58,9 @@ interface AuthContextValue {
   register: (
     email: string,
     password: string,
-    name: string
+    name: string,
+    orgName: string,
+    teamName: string
   ) => Promise<{ success: boolean; error: string | null }>;
   registerAsLeader: (
     email: string,
@@ -64,6 +70,7 @@ interface AuthContextValue {
     teamDescription?: string
   ) => Promise<{ success: boolean; error: string | null }>;
   logout: () => Promise<void>;
+  switchOrg: (orgId: string) => Promise<void>;
   switchTeam: (teamId: string) => Promise<void>;
   updateCurrentUser: (
     patch: Partial<Pick<TeamMember, "name" | "role" | "status">>
@@ -78,11 +85,15 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [allMembers, setAllMembers] = useState<TeamMember[]>([]);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(
+    localStorage.getItem("active_org_id")
+  );
   const [activeTeamId, setActiveTeamId] = useState<string | null>(
     getActiveTeam()
   );
   const [isLoading, setIsLoading] = useState(true);
 
+  const myOrgs = currentUser?.organizations ?? [];
   const myTeams = currentUser?.teams ?? [];
 
   // ── Bootstrap: restore session on mount ────────────────────────────────────
@@ -104,6 +115,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setCurrentUser(user);
+
+        // Pick organization
+        const storedOrgId = localStorage.getItem("active_org_id");
+        const validOrg = user.organizations.find((o) => o.id === storedOrgId) ?? user.organizations[0];
+        if (validOrg) {
+          setActiveOrgId(validOrg.id);
+          localStorage.setItem("active_org_id", validOrg.id);
+        }
 
         // Restore or pick the first available team
         const storedTeamId = getActiveTeam();
@@ -143,6 +162,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setCurrentUser(user);
 
+    // Pick organization
+    const storedOrgId = localStorage.getItem("active_org_id");
+    const validOrg = user.organizations.find((o) => o.id === storedOrgId) ?? user.organizations[0];
+    if (validOrg) {
+      setActiveOrgId(validOrg.id);
+      localStorage.setItem("active_org_id", validOrg.id);
+    }
+
     // Pick first team or previously stored team
     const storedTeamId = getActiveTeam();
     const teamToLoad =
@@ -158,14 +185,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true, error: null };
   }, []);
 
-  // ── Register (plain member) ────────────────────────────────────────────────
+  // ── Register (create workspace) ────────────────────────────────────────────
 
   const register = useCallback(
-    async (email: string, password: string, name: string) => {
-      const { user, error } = await signUp(email, password, name);
+    async (email: string, password: string, name: string, orgName: string, teamName: string) => {
+      const { user, error } = await signUp(email, password, name, orgName, teamName);
       if (!user) return { success: false, error };
+      
       setCurrentUser(user);
-      setAllMembers([]);
+      
+      const org = user.organizations[0];
+      if (org) {
+        setActiveOrgId(org.id);
+        localStorage.setItem("active_org_id", org.id);
+      }
+
+      const team = user.teams[0];
+      if (team) {
+        setActiveTeamId(team.id);
+        saveActiveTeam(team.id);
+        const members = await getAllMembers(team.id);
+        setAllMembers(members);
+      }
+
       return { success: true, error: null };
     },
     []
@@ -191,6 +233,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return { success: false, error };
 
       setCurrentUser(user);
+
+      const org = user.organizations[0];
+      if (org) {
+        setActiveOrgId(org.id);
+        localStorage.setItem("active_org_id", org.id);
+      }
 
       const team = user.teams[0];
       if (team) {
@@ -218,10 +266,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut();
     setCurrentUser(null);
     setAllMembers([]);
+    setActiveOrgId(null);
     setActiveTeamId(null);
   }, [currentUser, activeTeamId]);
 
   // ── Switch team ────────────────────────────────────────────────────────────
+
+  const switchOrg = useCallback(async (orgId: string) => {
+    setActiveOrgId(orgId);
+    localStorage.setItem("active_org_id", orgId);
+  }, []);
 
   const switchTeam = useCallback(async (teamId: string) => {
     setActiveTeamId(teamId);
@@ -252,13 +306,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         currentUser,
         allMembers,
+        activeOrgId,
         activeTeamId,
+        myOrgs,
         myTeams,
         isLoading,
         login,
         register,
         registerAsLeader,
         logout,
+        switchOrg,
         switchTeam,
         updateCurrentUser,
         refreshMembers,

@@ -8,6 +8,7 @@ import { ChatProvider } from "@/context/ChatContext";
 import Index from "./pages/Index";
 import LoginPage from "./pages/LoginPage";
 import NotFound from "./pages/NotFound";
+import Join from "./pages/Join";
 
 const queryClient = new QueryClient();
 
@@ -29,15 +30,17 @@ function AppRoutes() {
     );
   }
 
-  if (!currentUser) return <LoginPage />;
-
   return (
     <ChatProvider>
       <Routes>
-        <Route path="/" element={<Index />} />
+        {/* Public Routes */}
+        <Route path="/join/:token" element={<Join />} />
+        
+        {/* Protected Routes (fallback to Login if not authenticated) */}
+        <Route path="/" element={currentUser ? <Index /> : <LoginPage />} />
         
         {/* Admin Routes */}
-        <Route path="/admin" element={<AdminProtectedRoute />}>
+        <Route path="/admin" element={currentUser ? <AdminProtectedRoute /> : <LoginPage />}>
           <Route element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             {/* Future admin routes will go here */}

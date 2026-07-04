@@ -13,6 +13,7 @@ export interface AdminStats {
   projectCount: number;
   entryCount: number;
   bugCount: number;
+  orgCount?: number;
 }
 
 export interface AdminUser {

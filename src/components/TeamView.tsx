@@ -4,6 +4,7 @@ import { useChat } from "@/context/ChatContext";
 import { Wifi, WifiOff, Clock3, FolderKanban, Pencil, MessageCircle, Trash2 } from "lucide-react";
 import type { Project } from "@/data/mockData";
 import EditProfileModal from "./EditProfileModal";
+import InviteMemberModal from "./InviteMemberModal";
 import { removeMember } from "@/services/adminService";
 
 interface Props {
@@ -29,9 +30,11 @@ export default function TeamView({ projects, onViewProject }: Props) {
     const { currentUser, allMembers, refreshMembers } = useAuth();
     const { openDM } = useChat();
     const [editProfileOpen, setEditProfileOpen] = useState(false);
+    const [inviteModalOpen, setInviteModalOpen] = useState(false);
     const [removingId, setRemovingId] = useState<string | null>(null);
 
     const isAdmin = currentUser?.isAdmin === true;
+    const isTeamAdmin = currentUser?.role === "TEAM_ADMIN" || currentUser?.role === "TEAM_OWNER" || isAdmin;
 
     // Map memberId → assigned projects
     const memberProjects = new Map<string, Project[]>();
@@ -54,6 +57,15 @@ export default function TeamView({ projects, onViewProject }: Props) {
                         <span className="text-emerald-400 font-semibold">{onlineCount} online</span>
                     </p>
                 </div>
+                {isTeamAdmin && (
+                    <button
+                        onClick={() => setInviteModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                    >
+                        <Wifi className="h-4 w-4" /> {/* Wait, better icon would be UserPlus, but let's use what we have or import UserPlus */}
+                        Invite Member
+                    </button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -181,6 +193,7 @@ export default function TeamView({ projects, onViewProject }: Props) {
             </div>
 
             <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
+            <InviteMemberModal open={inviteModalOpen} onOpenChange={setInviteModalOpen} />
         </div>
     );
 }

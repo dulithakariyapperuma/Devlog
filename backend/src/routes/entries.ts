@@ -10,15 +10,14 @@
  */
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { authMiddleware } from "../middleware/auth";
-import { requireTeamMembership } from "../middleware/requireRole";
+import { requireTeamRole } from "../middleware/requireRole";
 
 const router = Router({ mergeParams: true });
 
 router.use(authMiddleware);
-router.use(requireTeamMembership());
+router.use(requireTeamRole());
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -138,8 +137,9 @@ router.patch("/:entryId", async (req: Request, res: Response) => {
 
   const isAuthor = entry.authorId === req.user!.userId;
   const isLeaderOrAbove =
-    req.teamRole === Role.TEAM_LEADER ||
-    req.user?.globalRole === Role.SUPER_ADMIN;
+    req.teamRole === "TEAM_ADMIN" ||
+    req.teamRole === "TEAM_OWNER" ||
+    req.user?.globalRole === "SUPER_ADMIN";
 
   if (!isAuthor && !isLeaderOrAbove) {
     res.status(403).json({ error: "Only the author or a team leader can edit entries" });
@@ -178,8 +178,9 @@ router.delete("/:entryId", async (req: Request, res: Response) => {
 
   const isAuthor = entry.authorId === req.user!.userId;
   const isLeaderOrAbove =
-    req.teamRole === Role.TEAM_LEADER ||
-    req.user?.globalRole === Role.SUPER_ADMIN;
+    req.teamRole === "TEAM_ADMIN" ||
+    req.teamRole === "TEAM_OWNER" ||
+    req.user?.globalRole === "SUPER_ADMIN";
 
   if (!isAuthor && !isLeaderOrAbove) {
     res.status(403).json({ error: "Only the author or a team leader can delete entries" });

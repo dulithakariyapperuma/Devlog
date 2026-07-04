@@ -4,25 +4,23 @@
  * Team management routes.
  *
  * GET    /api/teams                              — list my teams
- * POST   /api/teams                              — create a new team (I become TEAM_LEADER)
  * GET    /api/teams/:teamId                      — get team details
- * PATCH  /api/teams/:teamId                      — update team (TEAM_LEADER+)
- * DELETE /api/teams/:teamId                      — delete team (SUPER_ADMIN only)
- * POST   /api/teams/:teamId/join                 — join a team by slug
+ * PATCH  /api/teams/:teamId                      — update team (TEAM_ADMIN+)
+ * DELETE /api/teams/:teamId                      — delete team (TEAM_OWNER or SUPER_ADMIN)
  * GET    /api/teams/:teamId/members              — list all team members
- * PATCH  /api/teams/:teamId/members/:userId/role — change a member's role (TEAM_LEADER+)
+ * PATCH  /api/teams/:teamId/members/:userId/role — change a member's role (TEAM_ADMIN+)
  * PATCH  /api/teams/:teamId/members/:userId/status — update online status
- * DELETE /api/teams/:teamId/members/:userId      — remove a member (TEAM_LEADER+)
+ * DELETE /api/teams/:teamId/members/:userId      — remove a member (TEAM_ADMIN+)
  */
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { TeamRole } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { authMiddleware } from "../middleware/auth";
 import {
-  requireTeamMembership,
-  requireTeamLeader,
-  requireSuperAdmin,
+  requireTeamRole,
+  requireTeamAdmin,
+  requireOrgAdmin,
 } from "../middleware/requireRole";
 
 const router = Router();
@@ -32,26 +30,62 @@ router.use(authMiddleware);
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
-const createTeamSchema = z.object({
-  name: z.string().min(2),
-  description: z.string().optional(),
-});
-
 const updateTeamSchema = z.object({
   name: z.string().min(2).optional(),
   description: z.string().optional(),
 });
 
-const joinTeamSchema = z.object({
-  slug: z.string().min(1, "Team slug is required"),
+const createTeamSchema = z.object({
+  name: z.string().min(2),
+  description: z.string().optional(),
+  organizationId: z.string().uuid(),
 });
 
 const changeRoleSchema = z.object({
-  role: z.enum(["MEMBER", "TEAM_LEADER"]),
+  role: z.enum(["TEAM_MEMBER", "TEAM_ADMIN", "TEAM_OWNER"]),
 });
 
 const changeStatusSchema = z.object({
   status: z.enum(["online", "away", "offline"]),
+});
+
+// ── POST /api/teams ───────────────────────────────────────────────────────────
+router.post("/", requireOrgAdmin, async (req: Request, res: Response) => {
+  const parse = createTeamSchema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.flatten().fieldErrors });
+    return;
+  }
+
+  const { name, description, organizationId } = parse.data;
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+
+  const team = await prisma.team.create({
+    data: {
+      name,
+      slug,
+      description,
+      organizationId,
+    },
+  });
+
+  // Make the creator a TEAM_ADMIN
+  await prisma.teamMembership.create({
+    data: {
+      userId: req.user!.userId,
+      teamId: team.id,
+      role: "TEAM_ADMIN",
+      status: "online",
+    },
+  });
+
+  res.status(201).json({
+    id: team.id,
+    name: team.name,
+    slug: team.slug,
+    description: team.description,
+    organizationId: team.organizationId,
+  });
 });
 
 // ── GET /api/teams ────────────────────────────────────────────────────────────
@@ -71,6 +105,7 @@ router.get("/", async (req: Request, res: Response) => {
   res.json(
     memberships.map((m) => ({
       id: m.team.id,
+      organizationId: m.team.organizationId,
       name: m.team.name,
       slug: m.team.slug,
       description: m.team.description,
@@ -82,42 +117,8 @@ router.get("/", async (req: Request, res: Response) => {
   );
 });
 
-// ── POST /api/teams ───────────────────────────────────────────────────────────
-router.post("/", async (req: Request, res: Response) => {
-  const parse = createTeamSchema.safeParse(req.body);
-  if (!parse.success) {
-    res.status(400).json({ error: parse.error.flatten().fieldErrors });
-    return;
-  }
-
-  const { name, description } = parse.data;
-  const slug =
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") +
-    "-" +
-    Date.now();
-
-  const result = await prisma.$transaction(async (tx) => {
-    const team = await tx.team.create({ data: { name, slug, description } });
-    const membership = await tx.teamMembership.create({
-      data: { teamId: team.id, userId: req.user!.userId, role: Role.TEAM_LEADER },
-    });
-    return { team, membership };
-  });
-
-  res.status(201).json({
-    id: result.team.id,
-    name: result.team.name,
-    slug: result.team.slug,
-    description: result.team.description,
-    role: Role.TEAM_LEADER,
-  });
-});
-
 // ── GET /api/teams/:teamId ────────────────────────────────────────────────────
-router.get("/:teamId", requireTeamMembership(), async (req: Request, res: Response) => {
+router.get("/:teamId", requireTeamRole(), async (req: Request, res: Response) => {
   const team = await prisma.team.findUnique({
     where: { id: req.params.teamId },
     include: {
@@ -132,6 +133,7 @@ router.get("/:teamId", requireTeamMembership(), async (req: Request, res: Respon
 
   res.json({
     id: team.id,
+    organizationId: team.organizationId,
     name: team.name,
     slug: team.slug,
     description: team.description,
@@ -143,7 +145,7 @@ router.get("/:teamId", requireTeamMembership(), async (req: Request, res: Respon
 });
 
 // ── PATCH /api/teams/:teamId ──────────────────────────────────────────────────
-router.patch("/:teamId", requireTeamLeader, async (req: Request, res: Response) => {
+router.patch("/:teamId", requireTeamAdmin, async (req: Request, res: Response) => {
   const parse = updateTeamSchema.safeParse(req.body);
   if (!parse.success) {
     res.status(400).json({ error: parse.error.flatten().fieldErrors });
@@ -161,56 +163,17 @@ router.patch("/:teamId", requireTeamLeader, async (req: Request, res: Response) 
 // ── DELETE /api/teams/:teamId ─────────────────────────────────────────────────
 router.delete(
   "/:teamId",
-  requireSuperAdmin,
+  requireTeamRole([TeamRole.TEAM_OWNER]),
   async (req: Request, res: Response) => {
     await prisma.team.delete({ where: { id: req.params.teamId } });
     res.json({ message: "Team deleted" });
   }
 );
 
-// ── POST /api/teams/:teamId/join ──────────────────────────────────────────────
-router.post("/:teamId/join", async (req: Request, res: Response) => {
-  const parse = joinTeamSchema.safeParse(req.body);
-  if (!parse.success) {
-    res.status(400).json({ error: parse.error.flatten().fieldErrors });
-    return;
-  }
-
-  // Verify the slug matches the team
-  const team = await prisma.team.findFirst({
-    where: { id: req.params.teamId, slug: parse.data.slug },
-  });
-
-  if (!team) {
-    res.status(404).json({ error: "Team not found or slug does not match" });
-    return;
-  }
-
-  // Check if already a member
-  const existing = await prisma.teamMembership.findUnique({
-    where: { teamId_userId: { teamId: team.id, userId: req.user!.userId } },
-  });
-
-  if (existing) {
-    res.status(409).json({ error: "You are already a member of this team" });
-    return;
-  }
-
-  const membership = await prisma.teamMembership.create({
-    data: { teamId: team.id, userId: req.user!.userId, role: Role.MEMBER },
-  });
-
-  res.status(201).json({
-    teamId: team.id,
-    teamName: team.name,
-    role: membership.role,
-  });
-});
-
 // ── GET /api/teams/:teamId/members ────────────────────────────────────────────
 router.get(
   "/:teamId/members",
-  requireTeamMembership(),
+  requireTeamRole(),
   async (req: Request, res: Response) => {
     const memberships = await prisma.teamMembership.findMany({
       where: { teamId: req.params.teamId },
@@ -235,7 +198,7 @@ router.get(
 // ── PATCH /api/teams/:teamId/members/:userId/role ─────────────────────────────
 router.patch(
   "/:teamId/members/:userId/role",
-  requireTeamLeader,
+  requireTeamAdmin,
   async (req: Request, res: Response) => {
     const parse = changeRoleSchema.safeParse(req.body);
     if (!parse.success) {
@@ -250,7 +213,7 @@ router.patch(
           userId: req.params.userId,
         },
       },
-      data: { role: parse.data.role as Role },
+      data: { role: parse.data.role as TeamRole },
     });
 
     res.json({ userId: req.params.userId, role: membership.role });
@@ -260,13 +223,14 @@ router.patch(
 // ── PATCH /api/teams/:teamId/members/:userId/status ───────────────────────────
 router.patch(
   "/:teamId/members/:userId/status",
-  requireTeamMembership(),
+  requireTeamRole(),
   async (req: Request, res: Response) => {
-    // Users can only change their own status (unless team leader)
+    // Users can only change their own status (unless team admin)
     const isSelf = req.params.userId === req.user!.userId;
     const isLeaderOrAbove =
-      req.teamRole === Role.TEAM_LEADER ||
-      req.user?.globalRole === Role.SUPER_ADMIN;
+      req.teamRole === TeamRole.TEAM_ADMIN ||
+      req.teamRole === TeamRole.TEAM_OWNER ||
+      req.user?.globalRole === "SUPER_ADMIN";
 
     if (!isSelf && !isLeaderOrAbove) {
       res.status(403).json({ error: "You can only change your own status" });
@@ -296,7 +260,7 @@ router.patch(
 // ── DELETE /api/teams/:teamId/members/:userId ─────────────────────────────────
 router.delete(
   "/:teamId/members/:userId",
-  requireTeamLeader,
+  requireTeamAdmin,
   async (req: Request, res: Response) => {
     await prisma.teamMembership.delete({
       where: {

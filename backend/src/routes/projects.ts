@@ -16,8 +16,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { authMiddleware } from "../middleware/auth";
 import {
-  requireTeamMembership,
-  requireTeamLeader,
+  requireTeamRole,
+  requireTeamAdmin,
 } from "../middleware/requireRole";
 
 const router = Router({ mergeParams: true });
@@ -42,7 +42,7 @@ const addMemberSchema = z.object({
 });
 
 // ── GET /api/teams/:teamId/projects ───────────────────────────────────────────
-router.get("/", requireTeamMembership(), async (req: Request, res: Response) => {
+router.get("/", requireTeamRole(), async (req: Request, res: Response) => {
   const projects = await prisma.project.findMany({
     where: { teamId: req.params.teamId },
     include: {
@@ -75,7 +75,7 @@ router.get("/", requireTeamMembership(), async (req: Request, res: Response) => 
 });
 
 // ── POST /api/teams/:teamId/projects ──────────────────────────────────────────
-router.post("/", requireTeamLeader, async (req: Request, res: Response) => {
+router.post("/", requireTeamAdmin, async (req: Request, res: Response) => {
   const parse = createProjectSchema.safeParse(req.body);
   if (!parse.success) {
     res.status(400).json({ error: parse.error.flatten().fieldErrors });
@@ -131,7 +131,7 @@ router.post("/", requireTeamLeader, async (req: Request, res: Response) => {
 // ── GET /api/teams/:teamId/projects/:projectId ────────────────────────────────
 router.get(
   "/:projectId",
-  requireTeamMembership(),
+  requireTeamRole(),
   async (req: Request, res: Response) => {
     const project = await prisma.project.findFirst({
       where: { id: req.params.projectId, teamId: req.params.teamId },
@@ -203,7 +203,7 @@ router.get(
 // ── PATCH /api/teams/:teamId/projects/:projectId ──────────────────────────────
 router.patch(
   "/:projectId",
-  requireTeamLeader,
+  requireTeamAdmin,
   async (req: Request, res: Response) => {
     const parse = updateProjectSchema.safeParse(req.body);
     if (!parse.success) {
@@ -234,7 +234,7 @@ router.patch(
 // ── DELETE /api/teams/:teamId/projects/:projectId ─────────────────────────────
 router.delete(
   "/:projectId",
-  requireTeamLeader,
+  requireTeamAdmin,
   async (req: Request, res: Response) => {
     await prisma.project.deleteMany({
       where: { id: req.params.projectId, teamId: req.params.teamId },
@@ -246,7 +246,7 @@ router.delete(
 // ── POST /api/teams/:teamId/projects/:projectId/members ───────────────────────
 router.post(
   "/:projectId/members",
-  requireTeamLeader,
+  requireTeamAdmin,
   async (req: Request, res: Response) => {
     const parse = addMemberSchema.safeParse(req.body);
     if (!parse.success) {
@@ -287,7 +287,7 @@ router.post(
 // ── DELETE /api/teams/:teamId/projects/:projectId/members/:userId ─────────────
 router.delete(
   "/:projectId/members/:userId",
-  requireTeamLeader,
+  requireTeamAdmin,
   async (req: Request, res: Response) => {
     await prisma.projectMember.deleteMany({
       where: {

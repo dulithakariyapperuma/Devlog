@@ -1,29 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
-import { Users, FolderKanban, Bug, Zap } from "lucide-react";
+import { Users, FolderKanban, Bug, Zap, Building2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getAdminStats } from "@/services/adminService";
 
 export default function AdminDashboard() {
     const { data: stats, isLoading } = useQuery({
         queryKey: ["admin-stats"],
         queryFn: async () => {
-            const [
-                { count: usersCount }, 
-                { count: projectsCount }, 
-                { count: bugsCount }, 
-                { count: solutionsCount }
-            ] = await Promise.all([
-                supabase.from("profiles").select("*", { count: "exact", head: true }),
-                supabase.from("projects").select("*", { count: "exact", head: true }),
-                supabase.from("bug_reports").select("*", { count: "exact", head: true }).eq("status", "open"),
-                supabase.from("solution_entries").select("*", { count: "exact", head: true })
-            ]);
-
-            return {
-                users: usersCount || 0,
-                projects: projectsCount || 0,
-                openBugs: bugsCount || 0,
-                solutions: solutionsCount || 0,
+            const data = await getAdminStats();
+            return data || {
+                userCount: 0,
+                teamCount: 0,
+                projectCount: 0,
+                entryCount: 0,
+                bugCount: 0,
+                orgCount: 0,
             };
         }
     });
@@ -45,14 +36,23 @@ export default function AdminDashboard() {
                 </p>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-medium">Organizations</CardTitle>
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats?.orgCount || 0}</div>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Total Users</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats?.users}</div>
+                        <div className="text-2xl font-bold">{stats?.userCount || 0}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -61,7 +61,7 @@ export default function AdminDashboard() {
                         <FolderKanban className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats?.projects}</div>
+                        <div className="text-2xl font-bold">{stats?.projectCount || 0}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -70,7 +70,7 @@ export default function AdminDashboard() {
                         <Bug className="h-4 w-4 text-destructive" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-destructive">{stats?.openBugs}</div>
+                        <div className="text-2xl font-bold text-destructive">{stats?.bugCount || 0}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -79,7 +79,7 @@ export default function AdminDashboard() {
                         <Zap className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-emerald-500">{stats?.solutions}</div>
+                        <div className="text-2xl font-bold text-emerald-500">{stats?.entryCount || 0}</div>
                     </CardContent>
                 </Card>
             </div>

@@ -1,7 +1,8 @@
 import { useAuth } from "@/context/AuthContext";
-import { Rss, FileCode2, Search, Users, Terminal, FolderKanban, LogOut, Bug, BookOpen } from "lucide-react";
+import { Rss, FileCode2, Search, Users, Terminal, FolderKanban, LogOut, Bug, BookOpen, Building2 } from "lucide-react";
+import OrgTeamSwitcher from "./OrgTeamSwitcher";
 
-type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa" | "knowledge";
+type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa" | "knowledge" | "manage-teams";
 
 interface Props {
   active: NavItem;
@@ -10,15 +11,23 @@ interface Props {
   openBugCount?: number;
 }
 
-const navItems: { id: NavItem; label: string; icon: typeof Rss }[] = [
-  { id: "feed", label: "Live Feed", icon: Rss },
-  { id: "projects", label: "Projects", icon: FolderKanban },
-  { id: "solutions", label: "Solutions", icon: FileCode2 },
-  { id: "search", label: "Search", icon: Search },
-  { id: "team", label: "Team", icon: Users },
-  { id: "qa", label: "QA Bugs", icon: Bug },
-  { id: "knowledge", label: "Knowledge", icon: BookOpen },
-];
+const getNavItems = (isOrgAdmin: boolean) => {
+  const items: { id: NavItem; label: string; icon: typeof Rss }[] = [
+    { id: "feed", label: "Live Feed", icon: Rss },
+    { id: "projects", label: "Projects", icon: FolderKanban },
+    { id: "solutions", label: "Solutions", icon: FileCode2 },
+    { id: "search", label: "Search", icon: Search },
+    { id: "team", label: "Team", icon: Users },
+    { id: "qa", label: "QA Bugs", icon: Bug },
+    { id: "knowledge", label: "Knowledge", icon: BookOpen },
+  ];
+
+  if (isOrgAdmin) {
+    items.push({ id: "manage-teams", label: "Manage Teams", icon: Building2 });
+  }
+
+  return items;
+};
 
 const AVATAR_COLORS = [
   "from-violet-500 to-indigo-500",
@@ -29,8 +38,13 @@ const AVATAR_COLORS = [
 ];
 
 export default function DevLogSidebar({ active, onNavigate, onlineCount, openBugCount = 0 }: Props) {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, myOrgs, activeOrgId } = useAuth();
   const avatarColor = AVATAR_COLORS[parseInt(currentUser?.id ?? "0") % AVATAR_COLORS.length];
+
+  const activeOrg = myOrgs.find((o) => o.id === activeOrgId);
+  const isOrgAdmin = activeOrg?.role === "ORG_ADMIN" || activeOrg?.role === "ORG_OWNER";
+  
+  const currentNavItems = getNavItems(isOrgAdmin);
 
   return (
     <>
@@ -44,9 +58,13 @@ export default function DevLogSidebar({ active, onNavigate, onlineCount, openBug
           <span className="text-xl font-bold text-foreground">DevLog</span>
         </div>
 
+        <div className="mb-6">
+          <OrgTeamSwitcher />
+        </div>
+
         {/* Nav */}
         <nav className="flex flex-col gap-1 flex-1">
-          {navItems.map((item) => {
+          {currentNavItems.map((item) => {
             const isActive = active === item.id;
             return (
               <button
@@ -140,7 +158,7 @@ export default function DevLogSidebar({ active, onNavigate, onlineCount, openBug
 
       {/* ── Mobile Bottom Nav Bar ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-sidebar border-t border-border/50 flex items-center justify-around px-2 py-2 safe-bottom">
-        {navItems.map((item) => {
+        {currentNavItems.map((item) => {
           const isActive = active === item.id;
           return (
             <button

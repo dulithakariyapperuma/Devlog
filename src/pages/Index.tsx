@@ -10,6 +10,7 @@ import TeamView from "@/components/TeamView";
 import FloatingChatManager from "@/components/FloatingChatManager";
 import QAView from "@/components/QAView";
 import KnowledgeLinksView from "@/components/KnowledgeLinksView";
+import ManageTeamsView from "@/components/ManageTeamsView";
 import {
   type SolutionEntry,
   type Project,
@@ -26,7 +27,7 @@ import {
 import { getProjects, createProject, updateProject, deleteProject, createEntry, updateEntry, deleteEntry } from "@/services/projectService";
 import { getBugReports } from "@/services/bugService";
 
-type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa" | "knowledge";
+type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa" | "knowledge" | "manage-teams";
 
 const Index = () => {
   const { currentUser, allMembers, activeTeamId } = useAuth();
@@ -81,7 +82,10 @@ const Index = () => {
 
   // ── Project CRUD ─────────────────────────────────────────────────────────────
   const handleAddProject = async (project: Project) => {
-    if (!activeTeamId) return;
+    if (!activeTeamId) {
+      window.alert("You must be part of a team to create a project! Please switch teams or create one.");
+      return;
+    }
     const created = await createProject(
       activeTeamId,
       {
@@ -96,6 +100,8 @@ const Index = () => {
     if (created) {
       setProjects((prev) => [created, ...prev]);
       if (!feedProjectId) setFeedProjectId(created.id);
+    } else {
+      window.alert("Failed to create project. Check the console for details.");
     }
   };
 
@@ -396,6 +402,11 @@ const Index = () => {
     if (activeNav === "knowledge") return (
       <main className="flex-1 px-4 py-4 md:px-8 md:py-8 overflow-y-auto pt-[4.5rem] md:pt-8 pb-24 md:pb-8">
         <KnowledgeLinksView />
+      </main>
+    );
+    if (activeNav === "manage-teams") return (
+      <main className="flex-1 overflow-y-auto pt-[4.5rem] md:pt-8 pb-24 md:pb-8">
+        <ManageTeamsView />
       </main>
     );
     return <main className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Coming soon.</main>;

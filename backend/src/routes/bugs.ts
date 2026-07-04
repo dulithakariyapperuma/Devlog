@@ -11,15 +11,13 @@
  */
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { authMiddleware } from "../middleware/auth";
-import { requireTeamMembership } from "../middleware/requireRole";
+import { requireTeamRole, requireTeamAdmin } from "../middleware/requireRole";
 
 const router = Router({ mergeParams: true });
 
 router.use(authMiddleware);
-router.use(requireTeamMembership());
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -43,7 +41,7 @@ async function verifyProjectInTeam(projectId: string, teamId: string) {
 }
 
 // ── GET all bugs ──────────────────────────────────────────────────────────────
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", requireTeamRole(), async (req: Request, res: Response) => {
   const project = await verifyProjectInTeam(req.params.projectId, req.params.teamId);
   if (!project) {
     res.status(404).json({ error: "Project not found in this team" });
@@ -63,7 +61,7 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // ── POST bug ──────────────────────────────────────────────────────────────────
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", requireTeamRole(), async (req: Request, res: Response) => {
   const parse = bugSchema.safeParse(req.body);
   if (!parse.success) {
     res.status(400).json({ error: parse.error.flatten().fieldErrors });
@@ -102,7 +100,7 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // ── GET single bug ────────────────────────────────────────────────────────────
-router.get("/:bugId", async (req: Request, res: Response) => {
+router.get("/:bugId", requireTeamRole(), async (req: Request, res: Response) => {
   const bug = await prisma.bugReport.findFirst({
     where: { id: req.params.bugId, projectId: req.params.projectId },
     include: {
@@ -120,7 +118,7 @@ router.get("/:bugId", async (req: Request, res: Response) => {
 });
 
 // ── PATCH bug ─────────────────────────────────────────────────────────────────
-router.patch("/:bugId", async (req: Request, res: Response) => {
+router.patch("/:bugId", requireTeamRole(), async (req: Request, res: Response) => {
   const parse = bugSchema.partial().safeParse(req.body);
   if (!parse.success) {
     res.status(400).json({ error: parse.error.flatten().fieldErrors });
@@ -141,8 +139,9 @@ router.patch("/:bugId", async (req: Request, res: Response) => {
     bug.reportedById === req.user!.userId ||
     bug.assigneeId === req.user!.userId;
   const isLeaderOrAbove =
-    req.teamRole === Role.TEAM_LEADER ||
-    req.user?.globalRole === Role.SUPER_ADMIN;
+    req.teamRole === "TEAM_ADMIN" ||
+    req.teamRole === "TEAM_OWNER" ||
+    req.user?.globalRole === "SUPER_ADMIN";
 
   if (!isInvolved && !isLeaderOrAbove) {
     res.status(403).json({ error: "Not authorized to update this bug report" });
@@ -162,7 +161,7 @@ router.patch("/:bugId", async (req: Request, res: Response) => {
 });
 
 // ── DELETE bug ────────────────────────────────────────────────────────────────
-router.delete("/:bugId", async (req: Request, res: Response) => {
+router.delete("/:bugId", requireTeamAdmin, async (req: Request, res: Response) => {
   const bug = await prisma.bugReport.findFirst({
     where: { id: req.params.bugId, projectId: req.params.projectId },
   });
@@ -174,8 +173,9 @@ router.delete("/:bugId", async (req: Request, res: Response) => {
 
   const isReporter = bug.reportedById === req.user!.userId;
   const isLeaderOrAbove =
-    req.teamRole === Role.TEAM_LEADER ||
-    req.user?.globalRole === Role.SUPER_ADMIN;
+    req.teamRole === "TEAM_ADMIN" ||
+    req.teamRole === "TEAM_OWNER" ||
+    req.user?.globalRole === "SUPER_ADMIN";
 
   if (!isReporter && !isLeaderOrAbove) {
     res.status(403).json({ error: "Only the reporter or team leader can delete bug reports" });

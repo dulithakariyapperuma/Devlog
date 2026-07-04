@@ -11,15 +11,14 @@
  */
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { authMiddleware } from "../middleware/auth";
-import { requireTeamMembership } from "../middleware/requireRole";
+import { requireTeamRole } from "../middleware/requireRole";
 
 const router = Router({ mergeParams: true });
 
 router.use(authMiddleware);
-router.use(requireTeamMembership());
+router.use(requireTeamRole());
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -97,8 +96,9 @@ router.patch("/:linkId", async (req: Request, res: Response) => {
 
   const isOwner = link.addedById === req.user!.userId;
   const isLeaderOrAbove =
-    req.teamRole === Role.TEAM_LEADER ||
-    req.user?.globalRole === Role.SUPER_ADMIN;
+    req.teamRole === "TEAM_ADMIN" ||
+    req.teamRole === "TEAM_OWNER" ||
+    req.user?.globalRole === "SUPER_ADMIN";
 
   if (!isOwner && !isLeaderOrAbove) {
     res.status(403).json({ error: "Only the link owner or team leader can edit" });
@@ -127,8 +127,9 @@ router.delete("/:linkId", async (req: Request, res: Response) => {
 
   const isOwner = link.addedById === req.user!.userId;
   const isLeaderOrAbove =
-    req.teamRole === Role.TEAM_LEADER ||
-    req.user?.globalRole === Role.SUPER_ADMIN;
+    req.teamRole === "TEAM_ADMIN" ||
+    req.teamRole === "TEAM_OWNER" ||
+    req.user?.globalRole === "SUPER_ADMIN";
 
   if (!isOwner && !isLeaderOrAbove) {
     res.status(403).json({ error: "Only the link owner or team leader can delete" });

@@ -16,8 +16,16 @@ export interface TeamInfo {
   role: "SUPER_ADMIN" | "TEAM_LEADER" | "MEMBER";
 }
 
+export interface OrgInfo {
+  id: string;
+  name: string;
+  slug: string;
+  role: "SUPER_ADMIN" | "ORG_OWNER" | "ORG_ADMIN" | "ORG_MEMBER";
+}
+
 export interface AuthUser extends TeamMember {
   globalRole: "SUPER_ADMIN" | null;
+  organizations: OrgInfo[];
   teams: TeamInfo[];
 }
 
@@ -27,6 +35,7 @@ interface ApiUser {
   email: string;
   avatar: string;
   globalRole: "SUPER_ADMIN" | null;
+  organizations: OrgInfo[];
   teams: TeamInfo[];
 }
 
@@ -41,6 +50,7 @@ function apiUserToMember(u: ApiUser): AuthUser {
     password: "",
     isAdmin: u.globalRole === "SUPER_ADMIN",
     globalRole: u.globalRole,
+    organizations: u.organizations,
     teams: u.teams,
   };
 }
@@ -68,16 +78,15 @@ export async function signIn(
 
 // ── Register (plain member — joins a team separately) ─────────────────────────
 
-export async function signUp(
-  email: string,
-  password: string,
-  name: string
-): Promise<{ user: AuthUser | null; error: string | null }> {
+export async function signUp(email: string, password: string, name: string, organizationName: string, teamName?: string): Promise<{ user: AuthUser | null; error: string | null }> {
   try {
-    const { data } = await api.post<{ token: string; user: ApiUser }>(
-      "/auth/register",
-      { email, password, name }
-    );
+    const { data } = await api.post<{ token: string; user: ApiUser }>("/auth/register", {
+      email,
+      password,
+      name,
+      organizationName,
+      teamName,
+    });
     saveToken(data.token);
     return { user: apiUserToMember(data.user), error: null };
   } catch (err: unknown) {

@@ -7,7 +7,7 @@
  * This gives us TypeScript autocomplete and type safety
  * throughout all route handlers without any casting.
  */
-import { Role } from "@prisma/client";
+import { OrgRole, TeamRole } from "@prisma/client";
 
 declare global {
   namespace Express {
@@ -16,10 +16,12 @@ declare global {
       user?: {
         userId: string;
         email: string;
-        globalRole: Role | null;
+        globalRole: string | null;
       };
-      /** Set by requireTeamMembership middleware */
-      teamRole?: Role;
+      /** Set by requireTeamRole middleware */
+      teamRole?: TeamRole;
+      /** Set by requireOrgRole middleware */
+      orgRole?: OrgRole;
     }
   }
 }

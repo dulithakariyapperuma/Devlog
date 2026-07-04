@@ -26,10 +26,12 @@ export default function LoginPage() {
 
     // Signup-only
     const [name, setName] = useState("");
+    const [orgName, setOrgName] = useState("");
+    const [teamName, setTeamName] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
     const reset = () => {
-        setEmail(""); setPassword(""); setName(""); setConfirmPassword(""); setError("");
+        setEmail(""); setPassword(""); setName(""); setOrgName(""); setTeamName(""); setConfirmPassword(""); setError("");
     };
 
     const switchMode = (m: "login" | "signup") => { setMode(m); reset(); };
@@ -46,17 +48,18 @@ export default function LoginPage() {
         e.preventDefault();
         setError("");
         if (!name.trim()) return setError("Please enter your full name.");
+        if (!orgName.trim()) return setError("Please enter an Organization name.");
         if (password.length < 6) return setError("Password must be at least 6 characters.");
         if (password !== confirmPassword) return setError("Passwords do not match.");
         setLoading(true);
-        const { success, error: regError } = await register(email.trim(), password, name.trim());
+        const { success, error: regError } = await register(email.trim(), password, name.trim(), orgName.trim(), teamName.trim());
         if (!success) setError(regError ?? "Sign up failed. Please try again.");
         setLoading(false);
     };
 
     const isLogin = mode === "login";
     // Preview initials from name for signup avatar
-    const previewInitials = name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "??";
+    const previewInitials = name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 
     return (
         <div className="min-h-screen flex">
@@ -109,26 +112,36 @@ export default function LoginPage() {
                             onClick={() => switchMode("signup")}
                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${!isLogin ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                         >
-                            <UserPlus className="h-3.5 w-3.5" /> Create Account
+                            <UserPlus className="h-3.5 w-3.5" /> Create Workspace
                         </button>
                     </div>
 
-                    <div className="mb-8">
+                    <div className="mb-6">
                         <h2 className="text-2xl font-bold text-foreground">
-                            {isLogin ? "Welcome back" : "Join DevLog"}
+                            {isLogin ? "Welcome back" : "Create a Workspace"}
                         </h2>
                         <p className="text-muted-foreground text-sm mt-1">
                             {isLogin
-                                ? "Sign in to your workspace"
-                                : "Create your account to get started"}
+                                ? "Sign in to your account"
+                                : "Set up a new organization as an admin"}
                         </p>
+                        {!isLogin && (
+                            <div className="mt-3 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                                <p className="text-xs text-primary font-medium">
+                                    Got an invite from your team?
+                                </p>
+                                <p className="text-[11px] text-primary/80 mt-0.5 leading-tight">
+                                    Don't create a new workspace. Click the invite link sent to you by your admin instead.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Signup avatar preview */}
                     {!isLogin && (
-                        <div className="flex justify-center mb-6">
-                            <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${AVATAR_COLORS[0]} flex items-center justify-center text-xl font-bold text-white shadow-lg transition-all`}>
-                                {previewInitials}
+                        <div className="flex justify-center mb-4">
+                            <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${AVATAR_COLORS[0]} flex items-center justify-center text-lg font-bold text-white shadow-lg transition-all`}>
+                                {previewInitials ? previewInitials : <Terminal className="h-6 w-6 text-white/90" />}
                             </div>
                         </div>
                     )}
@@ -197,6 +210,24 @@ export default function LoginPage() {
                                 />
                             </div>
                             <div className="space-y-2">
+                                <Label>Organization Name</Label>
+                                <Input
+                                    value={orgName}
+                                    onChange={(e) => setOrgName(e.target.value)}
+                                    placeholder="e.g. Acme Corp"
+                                    required
+                                    autoComplete="organization"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>First Team Name <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                                <Input
+                                    value={teamName}
+                                    onChange={(e) => setTeamName(e.target.value)}
+                                    placeholder="e.g. Engineering"
+                                />
+                            </div>
+                            <div className="space-y-2">
                                 <Label>Email</Label>
                                 <Input
                                     type="email"
@@ -207,46 +238,48 @@ export default function LoginPage() {
                                     autoComplete="email"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Label>Password <span className="text-muted-foreground font-normal text-xs">(min 6 chars)</span></Label>
-                                <div className="relative">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Password</Label>
+                                    <div className="relative">
+                                        <Input
+                                            type={showPassword ? "text" : "password"}
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            required
+                                            autoComplete="new-password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword((v) => !v)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Confirm</Label>
                                     <Input
                                         type={showPassword ? "text" : "password"}
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
                                         placeholder="••••••••"
                                         required
                                         autoComplete="new-password"
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword((v) => !v)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                                    >
-                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                    </button>
                                 </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label>Confirm Password</Label>
-                                <Input
-                                    type={showPassword ? "text" : "password"}
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    required
-                                    autoComplete="new-password"
-                                />
-                            </div>
-                            <Button type="submit" className="w-full gap-2 mt-2" disabled={loading}>
+                            <Button type="submit" className="w-full gap-2 mt-4" disabled={loading}>
                                 {loading ? (
-                                    <><span className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />Creating account…</>
+                                    <><span className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />Creating Workspace…</>
                                 ) : (
-                                    <><UserPlus className="h-4 w-4" />Create Account</>
+                                    <><UserPlus className="h-4 w-4" />Create Workspace</>
                                 )}
                             </Button>
                             <p className="text-[11px] text-muted-foreground text-center">
-                                Your account will be active immediately after sign-up.
+                                You will be set as the Organization Admin automatically.
                             </p>
                         </form>
                     )}
