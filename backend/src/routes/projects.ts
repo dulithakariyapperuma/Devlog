@@ -103,10 +103,29 @@ router.post("/", requireTeamLeader, async (req: Request, res: Response) => {
       });
     }
 
-    return p;
+    return tx.project.findUnique({
+      where: { id: p.id },
+      include: {
+        members: { include: { user: true } }
+      }
+    });
   });
 
-  res.status(201).json({ id: project.id, name: project.name, status: project.status });
+  if (!project) {
+    res.status(500).json({ error: "Failed to create project" });
+    return;
+  }
+
+  res.status(201).json({
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    status: project.status,
+    startDate: project.startDate,
+    endDate: project.endDate,
+    createdAt: project.createdAt,
+    memberIds: project.members.map(m => m.memberId)
+  });
 });
 
 // ── GET /api/teams/:teamId/projects/:projectId ────────────────────────────────
