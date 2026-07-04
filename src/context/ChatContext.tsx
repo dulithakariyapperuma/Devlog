@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { ChatMessage, Project } from "@/data/mockData";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import { getChatMessages, sendChatMessage, subscribeToProjectChat } from "@/services/chatService";
 import { useAuth } from "@/context/AuthContext";
 
@@ -34,7 +33,7 @@ interface ChatContextValue {
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-    const { allMembers } = useAuth();
+    const { allMembers, activeTeamId } = useAuth();
     const [dms, setDMs] = useState<Record<string, DMConversation>>({});
     const [groupChats, setGroupChats] = useState<Record<string, GroupChatWindow>>({});
 
@@ -68,9 +67,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }));
     };
 
-    // ── Group chat — backed by Supabase when configured ─────────────────────────
+    // ── Group chat — backed by REST API ─────────────────────────────────────────
     const openGroupChat = useCallback(async (project: Project) => {
-        // Open the window immediately (unminimized)
         let alreadyLoaded = false;
         setGroupChats((prev) => {
             const existing = prev[project.id];
@@ -84,10 +82,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             };
         });
 
-        // Load history from Supabase only if not yet loaded
-        if (!isSupabaseConfigured || alreadyLoaded) return;
+        if (alreadyLoaded || !activeTeamId) return;
 
-        const history = await getChatMessages(project.id);
+        const history = await getChatMessages(activeTeamId, project.id);
 
         setGroupChats((prev) => ({
             ...prev,
@@ -97,7 +94,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 loaded: true,
             },
         }));
-    }, [allMembers]);
+    }, [allMembers, activeTeamId]);
 
     // ── Realtime subscription for open group chats ──────────────────────────────
     // Stable key: only changes when the set of open project IDs changes
@@ -107,38 +104,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     );
 
     useEffect(() => {
-        if (!isSupabaseConfigured) return;
+        if (!activeTeamId) return;
 
         const openProjectIds = Object.keys(groupChats);
         if (openProjectIds.length === 0) return;
 
-        const membersMap = new Map(allMembers.map((m) => [m.id, m]));
-
         const unsubs = openProjectIds.map((projectId) =>
-            subscribeToProjectChat(projectId, membersMap, (msg) => {
+            subscribeToProjectChat(activeTeamId, projectId, (newMsgs) => {
                 setGroupChats((prev) => {
                     const gc = prev[projectId];
                     if (!gc) return prev;
-                    // Dedup: ignore if any message with this real id already exists,
-                    // OR if there's a temp optimistic message with the same text+author within 5s
-                    const isDuplicate = gc.messages.some((m) =>
-                        m.id === msg.id ||
-                        (m.id.startsWith("temp-") &&
-                            m.authorId === msg.authorId &&
-                            m.text === msg.text &&
-                            Math.abs(m.timestamp.getTime() - msg.timestamp.getTime()) < 5000)
-                    );
-                    if (isDuplicate) return prev;
+                    const existingIds = new Set(gc.messages.map((m) => m.id));
+                    const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
+                    if (fresh.length === 0) return prev;
                     return {
                         ...prev,
-                        [projectId]: { ...gc, messages: [...gc.messages, msg] },
+                        [projectId]: { ...gc, messages: [...gc.messages, ...fresh] },
                     };
                 });
             })
         );
 
         return () => unsubs.forEach((fn) => fn());
-    }, [openProjectIdsKey, allMembers]);
+    }, [openProjectIdsKey, activeTeamId]);
 
     const closeGroupChat = (projectId: string) =>
         setGroupChats((prev) => { const n = { ...prev }; delete n[projectId]; return n; });
@@ -150,21 +138,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }));
 
     const sendGroupMessage = async (projectId: string, authorId: string, text: string) => {
-        if (!isSupabaseConfigured) {
-            // Mock: add locally
-            const msg: ChatMessage = { id: crypto.randomUUID(), authorId, text, timestamp: new Date() };
-            setGroupChats((prev) => ({
-                ...prev,
-                [projectId]: {
-                    ...(prev[projectId] ?? { projectId, projectName: projectId, minimized: false, loaded: true }),
-                    messages: [...(prev[projectId]?.messages ?? []), msg],
-                },
-            }));
-            return;
-        }
+        if (!activeTeamId) return;
 
-
-        // Optimistic: add immediately with a temp id
+        // Optimistic: show immediately with a temp id
         const tempId = `temp-${crypto.randomUUID()}`;
         const optimistic: ChatMessage = { id: tempId, authorId, text, timestamp: new Date() };
         setGroupChats((prev) => ({
@@ -175,9 +151,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             },
         }));
 
-        const saved = await sendChatMessage(projectId, authorId, text);
+        const saved = await sendChatMessage(activeTeamId, projectId, authorId, text);
         if (saved) {
-            // Replace the temp message with the real one
+            // Replace temp with real message
             setGroupChats((prev) => ({
                 ...prev,
                 [projectId]: {

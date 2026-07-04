@@ -25,39 +25,23 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { isSupabaseConfigured } from "@/lib/supabase";
-import {
-  getProjects,
-  createProject,
-  updateProject,
-  deleteProject,
-  createEntry,
-  updateEntry,
-  deleteEntry,
-} from "@/services/projectService";
+import { getProjects, createProject, updateProject, deleteProject, createEntry, updateEntry, deleteEntry } from "@/services/projectService";
 import { getBugReports } from "@/services/bugService";
-import { subscribeToProjectEntries } from "@/services/chatService";
 
 type NavItem = "feed" | "projects" | "solutions" | "search" | "team" | "qa" | "knowledge";
 
 const Index = () => {
-  const { currentUser, allMembers } = useAuth();
+  const { currentUser, allMembers, activeTeamId } = useAuth();
   const { openGroupChat } = useChat();
 
   const [activeNav, setActiveNav] = useState<NavItem>("projects");
   const [searchQuery, setSearchQuery] = useState("");
-  const [projects, setProjects] = useState<Project[]>(
-    isSupabaseConfigured ? [] : initialProjects
-  );
+  const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
-  const [feedProjectId, setFeedProjectId] = useState<string>(
-    isSupabaseConfigured ? "" : (initialProjects[0]?.id ?? "")
-  );
+  const [feedProjectId, setFeedProjectId] = useState<string>("");
   const [feedDropdownOpen, setFeedDropdownOpen] = useState(false);
-  const [bugReports, setBugReports] = useState<BugReport[]>(
-    isSupabaseConfigured ? [] : initialBugReports
-  );
-  const [dataLoading, setDataLoading] = useState(isSupabaseConfigured);
+  const [bugReports, setBugReports] = useState<BugReport[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   const openBugCount = bugReports.filter((b) => b.status === "open").length;
   const onlineCount = allMembers.filter((m) => m.status === "online").length;
@@ -68,13 +52,13 @@ const Index = () => {
     [allMembers]
   );
 
-  // ── Initial data load from Supabase ─────────────────────────────────────────
+  // ── Initial data load from backend ──────────────────────────────────────────
   const loadData = useCallback(async () => {
-    if (!isSupabaseConfigured || !currentUser) return;
+    if (!activeTeamId || !currentUser) return;
     setDataLoading(true);
     const [fetchedProjects, fetchedBugs] = await Promise.all([
-      getProjects(membersMap),
-      getBugReports(),
+      getProjects(activeTeamId, membersMap),
+      getBugReports(activeTeamId, fetchedProjects?.[0]?.id ?? ""),
     ]);
     setProjects(fetchedProjects);
     setBugReports(fetchedBugs);
@@ -82,32 +66,18 @@ const Index = () => {
       setFeedProjectId(fetchedProjects[0].id);
     }
     setDataLoading(false);
-  }, [currentUser, membersMap, feedProjectId]);
+  }, [currentUser, activeTeamId, membersMap, feedProjectId]);
 
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]);
-
-  // ── Real-time subscription: refresh entries when any project changes ─────────
-  useEffect(() => {
-    if (!isSupabaseConfigured || projects.length === 0) return;
-    const unsubs = projects.map((p) =>
-      subscribeToProjectEntries(p.id, async () => {
-        const refreshed = await getProjects(membersMap);
-        setProjects(refreshed);
-      })
-    );
-    return () => unsubs.forEach((fn) => fn());
-  }, [projects.length, membersMap]); // re-subscribe when project list changes
+  }, [currentUser, activeTeamId]);
 
   // ── Project CRUD ─────────────────────────────────────────────────────────────
   const handleAddProject = async (project: Project) => {
-    if (!isSupabaseConfigured) {
-      setProjects((prev) => [project, ...prev]);
-      return;
-    }
+    if (!activeTeamId) return;
     const created = await createProject(
+      activeTeamId,
       {
         name: project.name,
         description: project.description,
@@ -137,8 +107,9 @@ const Index = () => {
         prev ? { ...updated, entries: prev.entries, groupMessages: prev.groupMessages } : prev
       );
     }
-    if (!isSupabaseConfigured) return;
+    if (!activeTeamId) return;
     await updateProject(
+      activeTeamId,
       updated.id,
       {
         name: updated.name,
@@ -157,8 +128,8 @@ const Index = () => {
     if (feedProjectId === id) {
       setFeedProjectId(projects.find((p) => p.id !== id)?.id ?? "");
     }
-    if (!isSupabaseConfigured) return;
-    await deleteProject(id);
+    if (!activeTeamId) return;
+    await deleteProject(activeTeamId, id);
   };
 
   // ── Entry CRUD ───────────────────────────────────────────────────────────────
@@ -179,10 +150,9 @@ const Index = () => {
   const newEntry = async (entry: SolutionEntry) => {
     const pid = activeProject?.id ?? feedProjectId;
     const withCurrentUser = { ...entry, author: currentUser ?? entry.author };
-    // Optimistic
     updateEntriesLocally(pid, (es) => [withCurrentUser, ...es]);
-    if (!isSupabaseConfigured || !currentUser) return;
-    await createEntry(pid, currentUser.id, {
+    if (!activeTeamId || !currentUser) return;
+    await createEntry(activeTeamId, pid, {
       status: entry.status,
       title: entry.title,
       module: entry.module,
@@ -190,16 +160,15 @@ const Index = () => {
       explanation: entry.explanation,
       codeSnippet: entry.codeSnippet,
     });
-    // Real-time subscription will refresh, but also reload to get the DB-generated id
-    const refreshed = await getProjects(membersMap);
+    const refreshed = await getProjects(activeTeamId, membersMap);
     setProjects(refreshed);
   };
 
   const editEntry = async (updated: SolutionEntry) => {
     const pid = activeProject?.id ?? feedProjectId;
     updateEntriesLocally(pid, (es) => es.map((e) => (e.id === updated.id ? updated : e)));
-    if (!isSupabaseConfigured) return;
-    await updateEntry(updated.id, {
+    if (!activeTeamId) return;
+    await updateEntry(activeTeamId, pid, updated.id, {
       status: updated.status,
       title: updated.title,
       module: updated.module,
@@ -212,8 +181,8 @@ const Index = () => {
   const deleteEntryItem = async (id: string) => {
     const pid = activeProject?.id ?? feedProjectId;
     updateEntriesLocally(pid, (es) => es.filter((e) => e.id !== id));
-    if (!isSupabaseConfigured) return;
-    await deleteEntry(id);
+    if (!activeTeamId) return;
+    await deleteEntry(activeTeamId, pid, id);
   };
 
   // ── Navigation ───────────────────────────────────────────────────────────────

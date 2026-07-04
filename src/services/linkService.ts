@@ -1,4 +1,10 @@
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+/**
+ * src/services/linkService.ts
+ * ─────────────────────────────────────────────────────
+ * Knowledge links (embedded Google Docs, Sheets, PDFs).
+ * Replaces Supabase calls.
+ */
+import api from "@/lib/apiClient";
 
 export type LinkType = "google_sheet" | "word_doc" | "google_doc" | "pdf" | "other";
 
@@ -28,145 +34,121 @@ export function detectLinkType(url: string): LinkType {
   const lower = url.toLowerCase();
   if (lower.includes("docs.google.com/spreadsheets")) return "google_sheet";
   if (lower.includes("docs.google.com/document")) return "google_doc";
-  if (lower.includes("onedrive") || lower.includes("sharepoint") || lower.includes(".docx"))
+  if (
+    lower.includes("onedrive") ||
+    lower.includes("sharepoint") ||
+    lower.includes(".docx")
+  )
     return "word_doc";
   if (lower.includes(".pdf")) return "pdf";
   return "other";
 }
 
 // ── Fetch all links ───────────────────────────────────────────────────────────
-export async function getKnowledgeLinks(): Promise<KnowledgeLink[]> {
-  if (!isSupabaseConfigured) return [];
+export async function getKnowledgeLinks(teamId: string): Promise<KnowledgeLink[]> {
+  try {
+    const { data } = await api.get<
+      Array<{
+        id: string;
+        title: string;
+        url: string;
+        description: string | null;
+        type: string;
+        category: string;
+        addedById: string;
+        addedBy: { id: string; name: string; avatar: string } | null;
+        createdAt: string;
+      }>
+    >(`/teams/${teamId}/knowledge`);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("knowledge_links")
-    .select(
-      `id, title, url, description, type, category, created_at, added_by_id,
-       profiles:added_by_id ( name, avatar )`
-    )
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("[linkService] getKnowledgeLinks:", error.message);
+    return data.map((row) => ({
+      id: row.id,
+      title: row.title,
+      url: row.url,
+      description: row.description,
+      type: row.type as LinkType,
+      category: row.category,
+      added_by_id: row.addedById ?? row.addedBy?.id ?? "",
+      added_by_name: row.addedBy?.name ?? "Unknown",
+      added_by_avatar: row.addedBy?.avatar ?? "?",
+      created_at: row.createdAt,
+    }));
+  } catch (err) {
+    console.error("[linkService] getKnowledgeLinks:", err);
     return [];
   }
-
-  return (data ?? []).map((row: {
-    id: string;
-    title: string;
-    url: string;
-    description: string | null;
-    type: string;
-    category: string;
-    added_by_id: string;
-    created_at: string;
-    profiles: { name: string; avatar: string } | null;
-  }) => ({
-    id: row.id,
-    title: row.title,
-    url: row.url,
-    description: row.description,
-    type: row.type as LinkType,
-    category: row.category,
-    added_by_id: row.added_by_id,
-    added_by_name: (row.profiles as { name: string; avatar: string } | null)?.name ?? "Unknown",
-    added_by_avatar: (row.profiles as { name: string; avatar: string } | null)?.avatar ?? "?",
-    created_at: row.created_at,
-  }));
 }
 
 // ── Create a link ─────────────────────────────────────────────────────────────
 export async function createKnowledgeLink(
+  teamId: string,
   payload: CreateLinkPayload,
-  userId: string,
+  _userId: string,
   userName: string,
   userAvatar: string
 ): Promise<KnowledgeLink | null> {
-  if (!isSupabaseConfigured) {
-    return {
-      id: crypto.randomUUID(),
-      ...payload,
-      description: payload.description ?? null,
-      added_by_id: userId,
-      added_by_name: userName,
-      added_by_avatar: userAvatar,
-      created_at: new Date().toISOString(),
-    };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("knowledge_links")
-    .insert({
+  try {
+    const { data } = await api.post<{
+      id: string;
+      title: string;
+      url: string;
+      description: string | null;
+      type: string;
+      category: string;
+      addedById: string;
+      addedBy: { id: string; name: string; avatar: string } | null;
+      createdAt: string;
+    }>(`/teams/${teamId}/knowledge`, {
       title: payload.title,
       url: payload.url,
       description: payload.description ?? null,
       type: payload.type,
       category: payload.category,
-      added_by_id: userId,
-    })
-    .select()
-    .single();
+    });
 
-  if (error) {
-    console.error("[linkService] createKnowledgeLink:", error.message);
+    return {
+      id: data.id,
+      title: data.title,
+      url: data.url,
+      description: data.description,
+      type: data.type as LinkType,
+      category: data.category,
+      added_by_id: data.addedById ?? data.addedBy?.id ?? "",
+      added_by_name: data.addedBy?.name ?? userName,
+      added_by_avatar: data.addedBy?.avatar ?? userAvatar,
+      created_at: data.createdAt,
+    };
+  } catch (err) {
+    console.error("[linkService] createKnowledgeLink:", err);
     return null;
   }
-
-  return {
-    id: data?.id,
-    title: data?.title,
-    url: data?.url,
-    description: data?.description,
-    type: data?.type as LinkType,
-    category: data?.category,
-    added_by_id: data?.added_by_id,
-    added_by_name: userName,
-    added_by_avatar: userAvatar,
-    created_at: data?.created_at,
-  };
 }
 
 // ── Update a link ─────────────────────────────────────────────────────────────
 export async function updateKnowledgeLink(
+  teamId: string,
   id: string,
   payload: Partial<CreateLinkPayload>
 ): Promise<boolean> {
-  if (!isSupabaseConfigured) return true;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("knowledge_links")
-    .update({
-      ...(payload.title !== undefined && { title: payload.title }),
-      ...(payload.url !== undefined && { url: payload.url }),
-      ...(payload.description !== undefined && { description: payload.description }),
-      ...(payload.type !== undefined && { type: payload.type }),
-      ...(payload.category !== undefined && { category: payload.category }),
-    })
-    .eq("id", id);
-
-  if (error) {
-    console.error("[linkService] updateKnowledgeLink:", error.message);
+  try {
+    await api.patch(`/teams/${teamId}/knowledge/${id}`, payload);
+    return true;
+  } catch (err) {
+    console.error("[linkService] updateKnowledgeLink:", err);
     return false;
   }
-  return true;
 }
 
 // ── Delete a link ─────────────────────────────────────────────────────────────
-export async function deleteKnowledgeLink(id: string): Promise<boolean> {
-  if (!isSupabaseConfigured) return true;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("knowledge_links")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    console.error("[linkService] deleteKnowledgeLink:", error.message);
+export async function deleteKnowledgeLink(
+  teamId: string,
+  id: string
+): Promise<boolean> {
+  try {
+    await api.delete(`/teams/${teamId}/knowledge/${id}`);
+    return true;
+  } catch (err) {
+    console.error("[linkService] deleteKnowledgeLink:", err);
     return false;
   }
-  return true;
 }

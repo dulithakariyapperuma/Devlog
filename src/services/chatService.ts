@@ -1,122 +1,131 @@
 /**
- * chatService.ts
- * Group chat messages — with real-time subscription support.
+ * src/services/chatService.ts
+ * ─────────────────────────────────────────────────────
+ * Chat messages — replaces Supabase realtime with polling.
+ *
+ * Supabase had built-in WebSocket realtime.
+ * Our backend uses REST for now. Polling every 3s gives a
+ * "live" feel without needing Socket.io yet.
+ * (Socket.io can be added later as a drop-in upgrade.)
  */
-import { supabase } from "@/lib/supabase";
-import type { ChatMessage, TeamMember } from "@/data/mockData";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import api from "@/lib/apiClient";
+import type { ChatMessage } from "@/data/mockData";
 
-// ── Fetch ────────────────────────────────────────────────────────────────────
+// ── Fetch messages ────────────────────────────────────────────────────────────
 
-export async function getChatMessages(projectId: string): Promise<ChatMessage[]> {
-    const { data, error } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: true });
+export async function getChatMessages(
+  teamId: string,
+  projectId: string
+): Promise<ChatMessage[]> {
+  try {
+    const { data } = await api.get<
+      Array<{
+        id: string;
+        authorId: string;
+        text: string;
+        createdAt: string;
+        author: { id: string; name: string; avatar: string } | null;
+      }>
+    >(`/teams/${teamId}/projects/${projectId}/chat`);
 
-    if (error || !data) return [];
-
-    return (data as any[]).map((row) => ({
-        id: row.id as string,
-        authorId: row.author_id as string,
-        text: row.text as string,
-        timestamp: new Date(row.created_at as string),
+    return data.map((row) => ({
+      id: row.id,
+      authorId: row.authorId ?? row.author?.id ?? "",
+      text: row.text,
+      timestamp: new Date(row.createdAt),
     }));
+  } catch (err) {
+    console.error("[chatService] getChatMessages:", err);
+    return [];
+  }
 }
 
-// ── Send ─────────────────────────────────────────────────────────────────────
+// ── Send message ──────────────────────────────────────────────────────────────
 
 export async function sendChatMessage(
-    projectId: string,
-    authorId: string,
-    text: string
+  teamId: string,
+  projectId: string,
+  _authorId: string,      // kept for API compat — backend uses JWT user
+  text: string
 ): Promise<ChatMessage | null> {
-    const insertPayload: any = { project_id: projectId, author_id: authorId, text };
+  try {
+    const { data } = await api.post<{
+      id: string;
+      authorId: string;
+      text: string;
+      createdAt: string;
+      author: { id: string } | null;
+    }>(`/teams/${teamId}/projects/${projectId}/chat`, { text });
 
-    const { data, error } = await supabase
-        .from("chat_messages")
-        .insert(insertPayload as never)
-        .select("*")
-        .single();
-
-    if (error || !data) { console.error(error); return null; }
-
-    const row = data as any;
     return {
-        id: row.id as string,
-        authorId: row.author_id as string,
-        text: row.text as string,
-        timestamp: new Date(row.created_at as string),
+      id: data.id,
+      authorId: data.authorId ?? data.author?.id ?? "",
+      text: data.text,
+      timestamp: new Date(data.createdAt),
     };
+  } catch (err) {
+    console.error("[chatService] sendChatMessage:", err);
+    return null;
+  }
 }
 
-// ── Real-time subscription ───────────────────────────────────────────────────
-
+// ── Polling-based "subscription" ──────────────────────────────────────────────
 /**
- * Subscribe to new chat messages for a project.
- * Returns an unsubscribe function — call it when the component unmounts.
+ * Polls for new messages every `intervalMs` milliseconds.
+ * Returns an unsubscribe function — call it on component unmount.
+ *
+ * This replaces Supabase's realtime WebSocket subscription.
+ * Upgrade path: swap this for Socket.io later.
  */
 export function subscribeToProjectChat(
-    projectId: string,
-    membersMap: Map<string, TeamMember>,
-    onNewMessage: (msg: ChatMessage) => void
+  teamId: string,
+  projectId: string,
+  onNewMessages: (msgs: ChatMessage[]) => void,
+  intervalMs = 3000
 ): () => void {
-    const channel: RealtimeChannel = supabase
-        .channel(`chat:${projectId}`)
-        .on(
-            "postgres_changes",
-            {
-                event: "INSERT",
-                schema: "public",
-                table: "chat_messages",
-                filter: `project_id=eq.${projectId}`,
-            },
-            (payload) => {
-                const row = payload.new as {
-                    id: string;
-                    project_id: string;
-                    author_id: string;
-                    text: string;
-                    created_at: string;
-                };
-                onNewMessage({
-                    id: row.id,
-                    authorId: row.author_id,
-                    text: row.text,
-                    timestamp: new Date(row.created_at),
-                });
-            }
-        )
-        .subscribe();
+  let lastTimestamp = new Date().toISOString();
+  let active = true;
 
-    return () => {
-        supabase.removeChannel(channel);
-    };
+  const poll = async () => {
+    if (!active) return;
+    try {
+      const { data } = await api.get<
+        Array<{ id: string; authorId: string; text: string; createdAt: string; author: { id: string } | null }>
+      >(`/teams/${teamId}/projects/${projectId}/chat`, {
+        params: { before: undefined },
+      });
+
+      const newMsgs = data
+        .filter((m) => m.createdAt > lastTimestamp)
+        .map((m) => ({
+          id: m.id,
+          authorId: m.authorId ?? m.author?.id ?? "",
+          text: m.text,
+          timestamp: new Date(m.createdAt),
+        }));
+
+      if (newMsgs.length > 0) {
+        lastTimestamp = newMsgs[newMsgs.length - 1].timestamp.toISOString();
+        onNewMessages(newMsgs);
+      }
+    } catch {
+      // Network error — silently retry next poll
+    }
+  };
+
+  const timer = setInterval(poll, intervalMs);
+  return () => {
+    active = false;
+    clearInterval(timer);
+  };
 }
 
-/**
- * Subscribe to new solution entries for a project (for the live feed).
- */
-export function subscribeToProjectEntries(
-    projectId: string,
-    onNewEntry: (entryId: string) => void
-): () => void {
-    const channel: RealtimeChannel = supabase
-        .channel(`entries:${projectId}`)
-        .on(
-            "postgres_changes",
-            {
-                event: "*",
-                schema: "public",
-                table: "solution_entries",
-                filter: `project_id=eq.${projectId}`,
-            },
-            () => onNewEntry(projectId)
-        )
-        .subscribe();
+// ── Delete message ────────────────────────────────────────────────────────────
 
-    return () => {
-        supabase.removeChannel(channel);
-    };
+export async function deleteChatMessage(
+  teamId: string,
+  projectId: string,
+  msgId: string
+): Promise<void> {
+  await api.delete(`/teams/${teamId}/projects/${projectId}/chat/${msgId}`);
 }

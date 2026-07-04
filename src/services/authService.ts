@@ -1,144 +1,183 @@
 /**
- * authService.ts
- * Wraps Supabase Auth + profile management.
+ * src/services/authService.ts
+ * ─────────────────────────────────────────────────────
+ * Authentication service — replaces Supabase Auth.
+ * Talks to the Node.js backend via JWT.
  */
-import { supabase } from "@/lib/supabase";
+import api, { saveToken, clearToken } from "@/lib/apiClient";
 import type { TeamMember } from "@/data/mockData";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface ProfileRow {
-    id: string;
-    name: string;
-    avatar: string;
-    status: string;
-    role: string;
-    email: string;
-    is_admin: boolean;
+export interface TeamInfo {
+  id: string;
+  name: string;
+  slug: string;
+  role: "SUPER_ADMIN" | "TEAM_LEADER" | "MEMBER";
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function rowToMember(row: ProfileRow): TeamMember {
-    return {
-        id: row.id,
-        name: row.name,
-        avatar: row.avatar,
-        status: row.status as TeamMember["status"],
-        role: row.role,
-        email: row.email,
-        password: "",
-        isAdmin: row.is_admin ?? false,
-    };
+export interface AuthUser extends TeamMember {
+  globalRole: "SUPER_ADMIN" | null;
+  teams: TeamInfo[];
 }
 
-// Fetch a profile row — uses `as any` to bypass Supabase strict never typing on generated client
-async function getProfile(userId: string): Promise<ProfileRow | null> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).from("profiles").select("*").eq("id", userId).single();
-    if (error || !data) return null;
-    return data as ProfileRow;
+interface ApiUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  globalRole: "SUPER_ADMIN" | null;
+  teams: TeamInfo[];
 }
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
+function apiUserToMember(u: ApiUser): AuthUser {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    avatar: u.avatar,
+    status: "online",
+    role: u.teams[0]?.role ?? "MEMBER",
+    password: "",
+    isAdmin: u.globalRole === "SUPER_ADMIN",
+    globalRole: u.globalRole,
+    teams: u.teams,
+  };
+}
 
+// ── Sign In ───────────────────────────────────────────────────────────────────
 
 export async function signIn(
-    email: string,
-    password: string
-): Promise<{ user: TeamMember | null; error: string | null }> {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.user) return { user: null, error: error?.message ?? "Login failed" };
-
-    const profile = await getProfile(data.user.id);
-    if (!profile) return { user: null, error: "Profile not found. Please contact your admin." };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("profiles").update({ status: "online" }).eq("id", data.user.id);
-
-    return { user: rowToMember({ ...profile, status: "online" }), error: null };
+  email: string,
+  password: string
+): Promise<{ user: AuthUser | null; error: string | null }> {
+  try {
+    const { data } = await api.post<{ token: string; user: ApiUser }>(
+      "/auth/login",
+      { email, password }
+    );
+    saveToken(data.token);
+    return { user: apiUserToMember(data.user), error: null };
+  } catch (err: unknown) {
+    const msg =
+      (err as { response?: { data?: { error?: string } } })?.response?.data
+        ?.error ?? "Login failed";
+    return { user: null, error: msg };
+  }
 }
+
+// ── Register (plain member — joins a team separately) ─────────────────────────
 
 export async function signUp(
-    email: string,
-    password: string,
-    name: string
-): Promise<{ user: TeamMember | null; error: string | null }> {
-    const avatar =
-        name.trim().split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) ||
-        email.slice(0, 2).toUpperCase();
-
-    const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { name, avatar, role: "Member" } },
-    });
-
-    if (error || !data.user) return { user: null, error: error?.message ?? "Sign up failed" };
-
-    if (!data.session) {
-        return {
-            user: null,
-            error: "Please disable 'Confirm email' in Supabase Authentication -> Providers -> Email, or click the verification link sent to your email."
-        };
-    }
-
-    // Wait for the trigger to create the profile row
-    await new Promise((r) => setTimeout(r, 800));
-
-    const profile = await getProfile(data.user.id);
-
-    if (!profile) {
-        // Trigger might still be running — return a minimal member
-        return {
-            user: {
-                id: data.user.id,
-                name,
-                avatar,
-                status: "online",
-                role: "Member",
-                email,
-                password: "",
-                isAdmin: false,
-            },
-            error: null,
-        };
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("profiles").update({ status: "online" }).eq("id", data.user.id);
-    return { user: rowToMember({ ...profile, status: "online" }), error: null };
+  email: string,
+  password: string,
+  name: string
+): Promise<{ user: AuthUser | null; error: string | null }> {
+  try {
+    const { data } = await api.post<{ token: string; user: ApiUser }>(
+      "/auth/register",
+      { email, password, name }
+    );
+    saveToken(data.token);
+    return { user: apiUserToMember(data.user), error: null };
+  } catch (err: unknown) {
+    const msg =
+      (err as { response?: { data?: { error?: string } } })?.response?.data
+        ?.error ?? "Registration failed";
+    return { user: null, error: msg };
+  }
 }
+
+// ── Register as Team Leader (creates a team at the same time) ─────────────────
+
+export async function signUpAsLeader(
+  email: string,
+  password: string,
+  name: string,
+  teamName: string,
+  teamDescription?: string
+): Promise<{ user: AuthUser | null; error: string | null }> {
+  try {
+    const { data } = await api.post<{ token: string; user: ApiUser }>(
+      "/auth/register-leader",
+      { email, password, name, teamName, teamDescription }
+    );
+    saveToken(data.token);
+    return { user: apiUserToMember(data.user), error: null };
+  } catch (err: unknown) {
+    const msg =
+      (err as { response?: { data?: { error?: string } } })?.response?.data
+        ?.error ?? "Registration failed";
+    return { user: null, error: msg };
+  }
+}
+
+// ── Sign Out ──────────────────────────────────────────────────────────────────
 
 export async function signOut(): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from("profiles").update({ status: "offline" }).eq("id", user.id);
-    }
-    await supabase.auth.signOut();
+  try {
+    await api.post("/auth/logout");
+  } catch {
+    // Ignore errors — just clear local state
+  } finally {
+    clearToken();
+  }
 }
 
-export async function getCurrentUser(): Promise<TeamMember | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-    const profile = await getProfile(user.id);
-    return profile ? rowToMember(profile) : null;
+// ── Get Current User ──────────────────────────────────────────────────────────
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const { data } = await api.get<ApiUser>("/auth/me");
+    return apiUserToMember(data);
+  } catch {
+    return null;
+  }
 }
 
-// ── Profiles / Team ───────────────────────────────────────────────────────────
+// ── Get All Members (for current team) ────────────────────────────────────────
 
-export async function getAllMembers(): Promise<TeamMember[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).from("profiles").select("*").order("name");
-    if (error || !data) return [];
-    return (data as ProfileRow[]).map(rowToMember);
+export async function getAllMembers(teamId: string): Promise<TeamMember[]> {
+  try {
+    const { data } = await api.get<
+      Array<{
+        id: string;
+        name: string;
+        email: string;
+        avatar: string;
+        role: string;
+        status: string;
+      }>
+    >(`/teams/${teamId}/members`);
+
+    return data.map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      avatar: m.avatar,
+      status: m.status as TeamMember["status"],
+      role: m.role,
+      password: "",
+    }));
+  } catch {
+    return [];
+  }
 }
+
+// ── Update Profile ────────────────────────────────────────────────────────────
 
 export async function updateProfile(
-    userId: string,
-    patch: Partial<Pick<TeamMember, "name" | "role" | "status">>
+  patch: Partial<Pick<TeamMember, "name" | "role">>
 ): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("profiles").update(patch).eq("id", userId);
+  await api.patch("/auth/me", patch);
+}
+
+// ── Update Status in Team ─────────────────────────────────────────────────────
+
+export async function updateMemberStatus(
+  teamId: string,
+  userId: string,
+  status: "online" | "away" | "offline"
+): Promise<void> {
+  await api.patch(`/teams/${teamId}/members/${userId}/status`, { status });
 }
