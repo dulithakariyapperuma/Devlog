@@ -20,6 +20,8 @@ import bugRoutes from "./routes/bugs";
 import knowledgeRoutes from "./routes/knowledge";
 import chatRoutes from "./routes/chat";
 import adminRoutes from "./routes/admin";
+import organizationRoutes from "./routes/organizations";
+import inviteRoutes from "./routes/invites";
 
 const app = express();
 
@@ -55,11 +57,17 @@ app.get("/health", (_req: Request, res: Response) => {
 
 // ── API Routes ────────────────────────────────────────────────────────────────
 
-// Auth: login, register, register-leader, /me
+// Auth: login, register, /me
 app.use("/api/auth", authRoutes);
 
 // Super admin dashboard
 app.use("/api/admin", adminRoutes);
+
+// Organizations
+app.use("/api/organizations", organizationRoutes);
+
+// Invites
+app.use("/api/invites", inviteRoutes);
 
 // Teams + member management
 app.use("/api/teams", teamRoutes);

@@ -4,16 +4,15 @@
  * Authentication routes.
  *
  * POST /api/auth/register        — create account (no team)
- * POST /api/auth/register-leader — create account + new team (becomes TEAM_LEADER)
  * POST /api/auth/login           — login, returns JWT + user info
  * GET  /api/auth/me              — get current user profile (requires auth)
  * PATCH /api/auth/me             — update name / avatar (requires auth)
+ * POST /api/auth/logout          — logout
  */
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { authMiddleware } from "../middleware/auth";
 
@@ -25,11 +24,8 @@ const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-const registerLeaderSchema = registerSchema.extend({
-  teamName: z.string().min(2, "Team name must be at least 2 characters"),
-  teamDescription: z.string().optional(),
+  organizationName: z.string().min(2, "Organization name must be at least 2 characters"),
+  teamName: z.string().min(2, "Team name must be at least 2 characters").optional(),
 });
 
 const loginSchema = z.object({
@@ -54,29 +50,17 @@ function makeAvatar(name: string): string {
     .slice(0, 2);
 }
 
-function makeSlug(teamName: string): string {
-  return (
-    teamName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") +
-    "-" +
-    Date.now()
-  );
-}
-
-function signToken(userId: string, email: string, globalRole: Role | null) {
+function signToken(userId: string, email: string, globalRole: string | null) {
   return jwt.sign(
     { userId, email, globalRole },
     process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN ?? "7d" }
+    { expiresIn: (process.env.JWT_EXPIRES_IN as any) ?? "7d" }
   );
 }
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
 /**
- * Register a plain member (no team yet).
- * They'll join a team by invitation or by team slug.
+ * Register a new user and create their initial Workspace (Organization) and Team.
  */
 router.post("/register", async (req: Request, res: Response) => {
   const parse = registerSchema.safeParse(req.body);
@@ -85,7 +69,7 @@ router.post("/register", async (req: Request, res: Response) => {
     return;
   }
 
-  const { name, email, password } = parse.data;
+  const { name, email, password, organizationName, teamName } = parse.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -94,91 +78,88 @@ router.post("/register", async (req: Request, res: Response) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const avatar = makeAvatar(name);
 
-  const user = await prisma.user.create({
-    data: { name, email, passwordHash, avatar: makeAvatar(name) },
-  });
+  try {
+    // Run everything in a transaction to ensure atomic workspace creation
+    const { user, org, team } = await prisma.$transaction(async (tx) => {
+      // 1. Create User
+      const newUser = await tx.user.create({
+        data: { name, email, passwordHash, avatar },
+      });
 
-  const token = signToken(user.id, user.email, null);
+      // 2. Create Organization
+      const orgSlug = organizationName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+      const newOrg = await tx.organization.create({
+        data: { name: organizationName, slug: orgSlug },
+      });
 
-  res.status(201).json({
-    token,
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      globalRole: user.globalRole,
-      teams: [],
-    },
-  });
-});
+      // 3. Make user ORG_ADMIN
+      await tx.orgMembership.create({
+        data: {
+          userId: newUser.id,
+          organizationId: newOrg.id,
+          role: "ORG_ADMIN",
+        },
+      });
 
-// ── POST /api/auth/register-leader ───────────────────────────────────────────
-/**
- * Register and simultaneously create a new team.
- * The registering user automatically becomes TEAM_LEADER.
- * This is done in a DB transaction — if anything fails,
- * no partial data is saved.
- */
-router.post("/register-leader", async (req: Request, res: Response) => {
-  const parse = registerLeaderSchema.safeParse(req.body);
-  if (!parse.success) {
-    res.status(400).json({ error: parse.error.flatten().fieldErrors });
-    return;
-  }
+      // 4. Create initial Team
+      const tName = teamName && teamName.trim() ? teamName.trim() : "General";
+      const tSlug = tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+      const newTeam = await tx.team.create({
+        data: {
+          name: tName,
+          slug: tSlug,
+          organizationId: newOrg.id,
+        },
+      });
 
-  const { name, email, password, teamName, teamDescription } = parse.data;
+      // 5. Make user TEAM_ADMIN
+      await tx.teamMembership.create({
+        data: {
+          userId: newUser.id,
+          teamId: newTeam.id,
+          role: "TEAM_ADMIN",
+          status: "online",
+        },
+      });
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    res.status(409).json({ error: "Email is already registered" });
-    return;
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  // $transaction = if any step fails, ALL steps are rolled back
-  const result = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: { name, email, passwordHash, avatar: makeAvatar(name) },
+      return { user: newUser, org: newOrg, team: newTeam };
     });
 
-    const team = await tx.team.create({
-      data: {
-        name: teamName,
-        slug: makeSlug(teamName),
-        description: teamDescription,
+    const token = signToken(user.id, user.email, null);
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        globalRole: user.globalRole,
+        organizations: [
+          {
+            id: org.id,
+            name: org.name,
+            slug: org.slug,
+            role: "ORG_ADMIN",
+          },
+        ],
+        teams: [
+          {
+            id: team.id,
+            organizationId: org.id,
+            name: team.name,
+            slug: team.slug,
+            role: "TEAM_ADMIN",
+          },
+        ],
       },
     });
-
-    const membership = await tx.teamMembership.create({
-      data: { userId: user.id, teamId: team.id, role: Role.TEAM_LEADER },
-    });
-
-    return { user, team, membership };
-  });
-
-  const token = signToken(result.user.id, result.user.email, null);
-
-  res.status(201).json({
-    token,
-    user: {
-      id: result.user.id,
-      name: result.user.name,
-      email: result.user.email,
-      avatar: result.user.avatar,
-      globalRole: result.user.globalRole,
-      teams: [
-        {
-          id: result.team.id,
-          name: result.team.name,
-          slug: result.team.slug,
-          role: Role.TEAM_LEADER,
-        },
-      ],
-    },
-  });
+  } catch (error) {
+    console.error("Workspace creation failed:", error);
+    res.status(500).json({ error: "Failed to create workspace" });
+  }
 });
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
@@ -194,7 +175,8 @@ router.post("/login", async (req: Request, res: Response) => {
   const user = await prisma.user.findUnique({
     where: { email },
     include: {
-      memberships: { include: { team: true } },
+      orgMemberships: { include: { organization: true } },
+      teamMemberships: { include: { team: true } },
     },
   });
 
@@ -225,8 +207,15 @@ router.post("/login", async (req: Request, res: Response) => {
       email: user.email,
       avatar: user.avatar,
       globalRole: user.globalRole,
-      teams: user.memberships.map((m) => ({
+      organizations: user.orgMemberships.map((m) => ({
+        id: m.organization.id,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        role: m.role,
+      })),
+      teams: user.teamMemberships.map((m) => ({
         id: m.team.id,
+        organizationId: m.team.organizationId,
         name: m.team.name,
         slug: m.team.slug,
         role: m.role,
@@ -239,7 +228,10 @@ router.post("/login", async (req: Request, res: Response) => {
 router.get("/me", authMiddleware, async (req: Request, res: Response) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.userId },
-    include: { memberships: { include: { team: true } } },
+    include: {
+      orgMemberships: { include: { organization: true } },
+      teamMemberships: { include: { team: true } },
+    },
   });
 
   if (!user) {
@@ -253,8 +245,16 @@ router.get("/me", authMiddleware, async (req: Request, res: Response) => {
     email: user.email,
     avatar: user.avatar,
     globalRole: user.globalRole,
-    teams: user.memberships.map((m) => ({
+    organizations: user.orgMemberships.map((m) => ({
+      id: m.organization.id,
+      name: m.organization.name,
+      slug: m.organization.slug,
+      role: m.role,
+      joinedAt: m.joinedAt,
+    })),
+    teams: user.teamMemberships.map((m) => ({
       id: m.team.id,
+      organizationId: m.team.organizationId,
       name: m.team.name,
       slug: m.team.slug,
       role: m.role,

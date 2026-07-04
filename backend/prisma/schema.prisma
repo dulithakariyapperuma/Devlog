@@ -12,64 +12,100 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── Role Enum ────────────────────────────────────────────────────────────────
-enum Role {
-  SUPER_ADMIN  // Global: can manage all teams
-  TEAM_LEADER  // Per-team: can manage members & projects
-  MEMBER       // Per-team: standard member
+// ── Role Enums ────────────────────────────────────────────────────────────────
+enum OrgRole {
+  SUPER_ADMIN  // Global platform admin
+  ORG_OWNER
+  ORG_ADMIN
+  ORG_MEMBER
+}
+
+enum TeamRole {
+  TEAM_OWNER
+  TEAM_ADMIN
+  TEAM_MEMBER
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
-// Replaces Supabase profiles table.
-// A user can be in many teams with different roles.
 model User {
   id           String   @id @default(uuid())
   name         String
   email        String   @unique
   passwordHash String   @map("password_hash")
   avatar       String?                              // 2-letter initials, e.g. "DK"
-  globalRole   Role?    @map("global_role")         // Only set for SUPER_ADMIN; null = regular user
+  
+  // Kept for backward compatibility or global platform access
+  globalRole   String?    @map("global_role")       // e.g. "SUPER_ADMIN"
 
   createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
-  memberships    TeamMembership[]
-  projectMembers ProjectMember[]
-  entries        SolutionEntry[]
-  assignedBugs   BugReport[]      @relation("assignee")
-  reportedBugs   BugReport[]      @relation("reporter")
-  knowledgeLinks KnowledgeLink[]
-  messages       ChatMessage[]
+  orgMemberships OrgMembership[]
+  teamMemberships TeamMembership[]
+  projectMembers  ProjectMember[]
+  entries         SolutionEntry[]
+  assignedBugs    BugReport[]      @relation("assignee")
+  reportedBugs    BugReport[]      @relation("reporter")
+  knowledgeLinks  KnowledgeLink[]
+  messages        ChatMessage[]
+  createdInvites  Invite[]         @relation("created_invites")
 
   @@map("users")
 }
 
-// ── Teams ─────────────────────────────────────────────────────────────────────
-// Each intern cohort / company department = one Team.
-// A team leader self-registers and creates their team.
-model Team {
+// ── Organizations ─────────────────────────────────────────────────────────────
+model Organization {
   id          String   @id @default(uuid())
   name        String
-  slug        String   @unique                      // URL-friendly, e.g. "intern-batch-2025"
-  description String?
+  slug        String   @unique
   createdAt   DateTime @default(now()) @map("created_at")
 
-  // Relations
+  memberships OrgMembership[]
+  teams       Team[]
+  invites     Invite[]
+
+  @@map("organizations")
+}
+
+// ── Org Memberships ───────────────────────────────────────────────────────────
+model OrgMembership {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  role           OrgRole  @default(ORG_MEMBER)
+  joinedAt       DateTime @default(now()) @map("joined_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("org_memberships")
+}
+
+// ── Teams ─────────────────────────────────────────────────────────────────────
+model Team {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  slug           String   @unique                      // URL-friendly, e.g. "intern-batch-2025"
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships    TeamMembership[]
   projects       Project[]
   knowledgeLinks KnowledgeLink[]
+  invites        Invite[]
 
   @@map("teams")
 }
 
 // ── Team Memberships ──────────────────────────────────────────────────────────
-// Junction: which user belongs to which team, and at what role.
-// One user can be TEAM_LEADER of one team and MEMBER of another.
 model TeamMembership {
   id       String   @id @default(uuid())
   teamId   String   @map("team_id")
   userId   String   @map("user_id")
-  role     Role     @default(MEMBER)
+  role     TeamRole @default(TEAM_MEMBER)
   status   String   @default("online")             // "online" | "away" | "offline"
   joinedAt DateTime @default(now()) @map("joined_at")
 
@@ -78,6 +114,25 @@ model TeamMembership {
 
   @@unique([teamId, userId])                       // One membership per user per team
   @@map("team_memberships")
+}
+
+// ── Invites ───────────────────────────────────────────────────────────────────
+model Invite {
+  id             String   @id @default(uuid())
+  tokenHash      String   @unique @map("token_hash")
+  organizationId String   @map("organization_id")
+  teamId         String?  @map("team_id")            // Null means Org-level invite
+  role           String                                // E.g., "ORG_MEMBER", "TEAM_ADMIN"
+  status         String   @default("active")         // "active", "accepted", "expired", "revoked"
+  expiresAt      DateTime @map("expires_at")
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team           Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy      User         @relation("created_invites", fields: [createdById], references: [id], onDelete: Cascade)
+  
+  @@map("invites")
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────

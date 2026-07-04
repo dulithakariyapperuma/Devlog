@@ -19,12 +19,11 @@
  */
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { Role } from "@prisma/client";
 
 interface JWTPayload {
   userId: string;
   email: string;
-  globalRole: Role | null;
+  globalRole: string | null;
 }
 
 export function authMiddleware(
