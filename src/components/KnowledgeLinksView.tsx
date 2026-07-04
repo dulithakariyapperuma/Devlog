@@ -15,7 +15,6 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { isSupabaseConfigured } from "@/lib/supabase";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -65,58 +64,6 @@ const AVATAR_COLORS = [
 function avatarColor(id: string) {
   return AVATAR_COLORS[parseInt(id[0] ?? "0", 16) % AVATAR_COLORS.length];
 }
-
-// ── Mock data for offline mode ─────────────────────────────────────────────────
-const MOCK_LINKS: KnowledgeLink[] = [
-  {
-    id: "1",
-    title: "Sprint Planning Sheet",
-    url: "https://docs.google.com/spreadsheets/d/example",
-    description: "Weekly sprint planning and task tracking sheet for all teams.",
-    type: "google_sheet",
-    category: "Development",
-    added_by_id: "1",
-    added_by_name: "Alice Chen",
-    added_by_avatar: "AC",
-    created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
-  },
-  {
-    id: "2",
-    title: "Product Requirements Document",
-    url: "https://docs.google.com/document/d/example",
-    description: "Master PRD for the Q2 product roadmap.",
-    type: "google_doc",
-    category: "Product",
-    added_by_id: "2",
-    added_by_name: "Bob Smith",
-    added_by_avatar: "BS",
-    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
-  },
-  {
-    id: "3",
-    title: "HR Onboarding Checklist",
-    url: "https://sharepoint.example.com/onboarding.docx",
-    description: "Step-by-step onboarding process for new team members.",
-    type: "word_doc",
-    category: "HR",
-    added_by_id: "3",
-    added_by_name: "Carol Johnson",
-    added_by_avatar: "CJ",
-    created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
-  },
-  {
-    id: "4",
-    title: "Q2 Budget Overview",
-    url: "https://docs.google.com/spreadsheets/d/budget",
-    description: "Quarterly budget allocation and expense tracking.",
-    type: "google_sheet",
-    category: "Finance",
-    added_by_id: "1",
-    added_by_name: "Alice Chen",
-    added_by_avatar: "AC",
-    created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
-  },
-];
 
 // ── Link Form Modal ───────────────────────────────────────────────────────────
 
@@ -439,10 +386,10 @@ function LinkCard({ link, currentUserId, onEdit, onDelete }: LinkCardProps) {
 // ── Main View ─────────────────────────────────────────────────────────────────
 
 export default function KnowledgeLinksView() {
-  const { currentUser } = useAuth();
+  const { currentUser, activeTeamId } = useAuth();
 
-  const [links, setLinks] = useState<KnowledgeLink[]>(isSupabaseConfigured ? [] : MOCK_LINKS);
-  const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [links, setLinks] = useState<KnowledgeLink[]>([]);
+  const [loading, setLoading] = useState(!!activeTeamId);
   const [showForm, setShowForm] = useState(false);
   const [editingLink, setEditingLink] = useState<KnowledgeLink | undefined>(undefined);
   const [search, setSearch] = useState("");
@@ -452,12 +399,15 @@ export default function KnowledgeLinksView() {
   const [catDropOpen, setCatDropOpen] = useState(false);
 
   const loadLinks = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
+    if (!activeTeamId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const data = await getKnowledgeLinks();
+    const data = await getKnowledgeLinks(activeTeamId);
     setLinks(data);
     setLoading(false);
-  }, []);
+  }, [activeTeamId]);
 
   useEffect(() => { loadLinks(); }, [loadLinks]);
 
@@ -489,16 +439,17 @@ export default function KnowledgeLinksView() {
 
   // CRUD handlers
   async function handleCreate(payload: CreateLinkPayload) {
-    if (!currentUser) return;
+    if (!currentUser || !activeTeamId) return;
     const created = await createKnowledgeLink(
+      activeTeamId,
       payload, currentUser.id, currentUser.name, currentUser.avatar
     );
     if (created) setLinks((prev) => [created, ...prev]);
   }
 
   async function handleEdit(payload: CreateLinkPayload) {
-    if (!editingLink) return;
-    const ok = await updateKnowledgeLink(editingLink.id, payload);
+    if (!editingLink || !activeTeamId) return;
+    const ok = await updateKnowledgeLink(activeTeamId, editingLink.id, payload);
     if (ok) {
       setLinks((prev) =>
         prev.map((l) =>
@@ -511,7 +462,8 @@ export default function KnowledgeLinksView() {
   }
 
   async function handleDelete(id: string) {
-    const ok = await deleteKnowledgeLink(id);
+    if (!activeTeamId) return;
+    const ok = await deleteKnowledgeLink(activeTeamId, id);
     if (ok) setLinks((prev) => prev.filter((l) => l.id !== id));
   }
 

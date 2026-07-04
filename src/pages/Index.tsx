@@ -11,8 +11,6 @@ import FloatingChatManager from "@/components/FloatingChatManager";
 import QAView from "@/components/QAView";
 import KnowledgeLinksView from "@/components/KnowledgeLinksView";
 import {
-  initialProjects,
-  initialBugReports,
   type SolutionEntry,
   type Project,
   type BugReport,
@@ -54,18 +52,26 @@ const Index = () => {
 
   // ── Initial data load from backend ──────────────────────────────────────────
   const loadData = useCallback(async () => {
-    if (!activeTeamId || !currentUser) return;
-    setDataLoading(true);
-    const [fetchedProjects, fetchedBugs] = await Promise.all([
-      getProjects(activeTeamId, membersMap),
-      getBugReports(activeTeamId, fetchedProjects?.[0]?.id ?? ""),
-    ]);
-    setProjects(fetchedProjects);
-    setBugReports(fetchedBugs);
-    if (fetchedProjects.length > 0 && !feedProjectId) {
-      setFeedProjectId(fetchedProjects[0].id);
+    if (!activeTeamId || !currentUser) {
+      setDataLoading(false);
+      return;
     }
-    setDataLoading(false);
+    setDataLoading(true);
+    try {
+      const [fetchedProjects, fetchedBugs] = await Promise.all([
+        getProjects(activeTeamId, membersMap),
+        getBugReports(activeTeamId, ""), // Fetch all bugs for the team initially
+      ]);
+      setProjects(fetchedProjects);
+      setBugReports(fetchedBugs);
+      if (fetchedProjects.length > 0 && !feedProjectId) {
+        setFeedProjectId(fetchedProjects[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to load workspace data:", err);
+    } finally {
+      setDataLoading(false);
+    }
   }, [currentUser, activeTeamId, membersMap, feedProjectId]);
 
   useEffect(() => {

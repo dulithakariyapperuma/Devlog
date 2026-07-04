@@ -11,7 +11,6 @@ import {
     type BugSeverity, type BugPriority, type BugStatus, type Project
 } from "@/data/mockData";
 import { useAuth } from "@/context/AuthContext";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import {
     getBugReports,
     createBugReport,
@@ -477,10 +476,9 @@ function BugCard({
 
 // ── Main QAView ───────────────────────────────────────────────────────────────
 export default function QAView({ projects }: { projects: Project[] }) {
-    const { currentUser, allMembers } = useAuth();
-    const [bugs, setBugs] = useState<BugReport[]>(
-        isSupabaseConfigured ? [] : initialBugReports
-    );
+    const { currentUser, allMembers, activeTeamId } = useAuth();
+    const [bugs, setBugs] = useState<BugReport[]>([]);
+    const [isLoading, setIsLoading] = useState(!!activeTeamId);
     const [formOpen, setFormOpen] = useState(false);
     const [searchQ, setSearchQ] = useState("");
     const [filterStatus, setFilterStatus] = useState<BugStatus | "all">("all");
@@ -490,17 +488,23 @@ export default function QAView({ projects }: { projects: Project[] }) {
 
     // ── Load from Supabase ───────────────────────────────────────────────────
     useEffect(() => {
-        if (!isSupabaseConfigured) return;
-        getBugReports().then(setBugs);
-    }, []);
+        const loadBugs = async () => {
+            if (!activeTeamId) {
+                setIsLoading(false);
+                return;
+            }
+            setIsLoading(true);
+            const data = await getBugReports(activeTeamId);
+            setBugs(data);
+            setIsLoading(false);
+        };
+        loadBugs();
+    }, [activeTeamId]);
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
     const handleAdd = async (bug: BugReport) => {
-        if (!isSupabaseConfigured) {
-            setBugs((p) => [bug, ...p]);
-            return;
-        }
-        const saved = await createBugReport({
+        if (!activeTeamId) return;
+        const saved = await createBugReport(activeTeamId, {
             title: bug.title,
             description: bug.description,
             stepsToReproduce: bug.stepsToReproduce,
@@ -520,14 +524,14 @@ export default function QAView({ projects }: { projects: Project[] }) {
 
     const handleStatusChange = async (id: string, status: BugStatus) => {
         setBugs((p) => p.map((b) => b.id === id ? { ...b, status, updatedAt: new Date() } : b));
-        if (!isSupabaseConfigured) return;
-        await updateBugReport(id, { status });
+        if (!activeTeamId) return;
+        await updateBugReport(activeTeamId, id, { status });
     };
 
     const handleDelete = async (id: string) => {
         setBugs((p) => p.filter((b) => b.id !== id));
-        if (!isSupabaseConfigured) return;
-        await deleteBugReport(id);
+        if (!activeTeamId) return;
+        await deleteBugReport(activeTeamId, id);
     };
 
     const filtered = useMemo(() => {

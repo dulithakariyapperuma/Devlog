@@ -3,7 +3,8 @@ import { format } from "date-fns";
 import {
     CalendarRange, CheckCircle2, Zap, Layers, ArrowRight, Pencil, Trash2,
 } from "lucide-react";
-import { teamMembers, type Project } from "@/data/mockData";
+import { type Project } from "@/data/mockData";
+import { useAuth } from "@/context/AuthContext";
 import ProjectFormModal from "./ProjectFormModal";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -38,10 +39,12 @@ const AVATAR_COLORS = [
 export default function ProjectCard({ project, index, onView, onEdit, onDelete }: Props) {
     const [editOpen, setEditOpen] = useState(false);
 
+    const { allMembers } = useAuth();
+    
     const resolvedCount = project.entries.filter((e) => e.status === "resolved").length;
     const inProgressCount = project.entries.filter((e) => e.status === "in-progress").length;
     const isCompleted = project.status === "completed";
-    const assignedMembers = teamMembers.filter((m) => project.memberIds.includes(m.id));
+    const assignedMembers = allMembers.filter((m) => project.memberIds.includes(m.id));
 
     return (
         <>
