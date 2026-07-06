@@ -48,12 +48,13 @@ function apiBugToBugReport(b: ApiBug): BugReport {
 
 export async function getBugReports(
   teamId: string,
-  projectId: string
+  projectId?: string
 ): Promise<BugReport[]> {
   try {
-    const { data } = await api.get<ApiBug[]>(
-      `/teams/${teamId}/projects/${projectId}/bugs`
-    );
+    const url = projectId 
+      ? `/teams/${teamId}/projects/${projectId}/bugs`
+      : `/teams/${teamId}/bugs`;
+    const { data } = await api.get<ApiBug[]>(url);
     return data.map(apiBugToBugReport);
   } catch (err) {
     console.error("[bugService] getBugReports:", err);

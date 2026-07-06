@@ -23,7 +23,8 @@ const getNavItems = (isOrgAdmin: boolean) => {
   ];
 
   if (isOrgAdmin) {
-    items.push({ id: "manage-teams", label: "Manage Teams", icon: Building2 });
+    // Manage Teams is now a tab inside TeamView for admins
+    // items.push({ id: "manage-teams", label: "Manage Teams", icon: Building2 });
   }
 
   return items;

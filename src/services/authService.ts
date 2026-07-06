@@ -89,10 +89,14 @@ export async function signUp(email: string, password: string, name: string, orga
     });
     saveToken(data.token);
     return { user: apiUserToMember(data.user), error: null };
-  } catch (err: unknown) {
-    const msg =
-      (err as { response?: { data?: { error?: string } } })?.response?.data
-        ?.error ?? "Registration failed";
+  } catch (err: any) {
+    const errorData = err.response?.data?.error;
+    let msg = "Registration failed";
+    if (typeof errorData === "string") {
+      msg = errorData;
+    } else if (typeof errorData === "object" && errorData !== null) {
+      msg = Object.values(errorData).flat().join(", ");
+    }
     return { user: null, error: msg };
   }
 }
@@ -113,10 +117,14 @@ export async function signUpAsLeader(
     );
     saveToken(data.token);
     return { user: apiUserToMember(data.user), error: null };
-  } catch (err: unknown) {
-    const msg =
-      (err as { response?: { data?: { error?: string } } })?.response?.data
-        ?.error ?? "Registration failed";
+  } catch (err: any) {
+    const errorData = err.response?.data?.error;
+    let msg = "Leader registration failed";
+    if (typeof errorData === "string") {
+      msg = errorData;
+    } else if (typeof errorData === "object" && errorData !== null) {
+      msg = Object.values(errorData).flat().join(", ");
+    }
     return { user: null, error: msg };
   }
 }

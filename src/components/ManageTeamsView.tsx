@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getOrgTeams, deleteTeam, getTeamMembers, removeTeamMember } from "@/services/teamService";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Loader2, Trash2, Edit2, Plus, ChevronDown, ChevronUp, UserMinus, Building2 } from "lucide-react";
+import { Users, Loader2, Trash2, Plus, ChevronDown, ChevronUp, UserMinus, Building2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import CreateTeamModal from "./CreateTeamModal";
+import InviteMemberModal from "./InviteMemberModal";
 
 export default function ManageTeamsView() {
   const { activeOrgId, myOrgs, currentUser } = useAuth();
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [selectedTeamForInvite, setSelectedTeamForInvite] = useState<string | null>(null);
+  
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [teamMembers, setTeamMembers] = useState<Record<string, any[]>>({});
   const [loadingMembers, setLoadingMembers] = useState<Record<string, boolean>>({});
@@ -76,6 +80,12 @@ export default function ManageTeamsView() {
     } else {
       toast.error("Failed to remove member");
     }
+  };
+
+  const handleOpenInvite = (e: React.MouseEvent, teamId: string) => {
+    e.stopPropagation();
+    setSelectedTeamForInvite(teamId);
+    setInviteModalOpen(true);
   };
 
   if (!activeOrgId) return null;
@@ -144,6 +154,12 @@ export default function ManageTeamsView() {
                       <Users className="h-4 w-4 text-primary" /> 
                       Team Members ({team.memberCount})
                     </h4>
+                    {isOrgAdmin && (
+                      <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={(e) => handleOpenInvite(e, team.id)}>
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Invite Member
+                      </Button>
+                    )}
                   </div>
                   
                   {loadingMembers[team.id] ? (
@@ -212,6 +228,14 @@ export default function ManageTeamsView() {
         }}
         organizationId={activeOrgId}
       />
+      
+      {selectedTeamForInvite && (
+        <InviteMemberModal
+          open={inviteModalOpen}
+          onOpenChange={setInviteModalOpen}
+          teamId={selectedTeamForInvite}
+        />
+      )}
     </div>
   );
 }

@@ -15,22 +15,28 @@ import { toast } from "sonner";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  teamId?: string | null;
 }
 
-export default function InviteMemberModal({ open, onOpenChange }: Props) {
-  const { activeTeamId } = useAuth();
+export default function InviteMemberModal({ open, onOpenChange, teamId: propTeamId }: Props) {
+  const { activeTeamId, activeOrgId } = useAuth();
+  const targetTeamId = propTeamId || activeTeamId;
   const [loading, setLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [role, setRole] = useState<"TEAM_MEMBER" | "TEAM_ADMIN">("TEAM_MEMBER");
+  const [role, setRole] = useState<"TEAM_MEMBER" | "TEAM_ADMIN" | "ORG_MEMBER" | "ORG_ADMIN">("TEAM_MEMBER");
   const [copied, setCopied] = useState(false);
 
   const handleGenerate = async () => {
-    if (!activeTeamId) return;
+    if (!activeOrgId) {
+      toast.error("No active organization found");
+      return;
+    }
     setLoading(true);
     setInviteLink(null);
     setCopied(false);
 
-    const { token, error } = await generateInvite(activeTeamId, role);
+    // If targetTeamId is empty, it's an org-level invite
+    const { token, error } = await generateInvite(activeOrgId, targetTeamId || null, role);
     setLoading(false);
 
     if (error || !token) {
@@ -80,7 +86,7 @@ export default function InviteMemberModal({ open, onOpenChange }: Props) {
             <Button
               className="w-full bg-gradient-to-r from-primary to-primary/80 hover:scale-[1.02] transition-transform shadow-lg shadow-primary/20"
               onClick={handleGenerate}
-              disabled={loading || !activeTeamId}
+              disabled={loading || !targetTeamId}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Generate Invite Link

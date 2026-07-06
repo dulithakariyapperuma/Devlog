@@ -6,6 +6,7 @@ import type { Project } from "@/data/mockData";
 import EditProfileModal from "./EditProfileModal";
 import InviteMemberModal from "./InviteMemberModal";
 import { removeMember } from "@/services/adminService";
+import ManageTeamsView from "./ManageTeamsView";
 
 interface Props {
     projects: Project[];
@@ -32,8 +33,9 @@ export default function TeamView({ projects, onViewProject }: Props) {
     const [editProfileOpen, setEditProfileOpen] = useState(false);
     const [inviteModalOpen, setInviteModalOpen] = useState(false);
     const [removingId, setRemovingId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"members" | "teams">("members");
 
-    const isAdmin = currentUser?.isAdmin === true;
+    const isAdmin = currentUser?.isAdmin === true || currentUser?.globalRole === "SUPER_ADMIN";
     const isTeamAdmin = currentUser?.role === "TEAM_ADMIN" || currentUser?.role === "TEAM_OWNER" || isAdmin;
 
     // Map memberId → assigned projects
@@ -62,13 +64,33 @@ export default function TeamView({ projects, onViewProject }: Props) {
                         onClick={() => setInviteModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
                     >
-                        <Wifi className="h-4 w-4" /> {/* Wait, better icon would be UserPlus, but let's use what we have or import UserPlus */}
+                        <Wifi className="h-4 w-4" />
                         Invite Member
                     </button>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {isAdmin && (
+                <div className="flex border-b border-border/50 mb-6">
+                    <button
+                        onClick={() => setActiveTab("members")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "members" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                    >
+                        Members
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("teams")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "teams" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                    >
+                        Manage Teams
+                    </button>
+                </div>
+            )}
+
+            {activeTab === "teams" ? (
+                <ManageTeamsView />
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {allMembers.map((member, i) => {
                     const cfg = STATUS_CONFIG[member.status];
                     const StatusIcon = cfg.icon;
@@ -191,6 +213,7 @@ export default function TeamView({ projects, onViewProject }: Props) {
                     );
                 })}
             </div>
+            )}
 
             <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
             <InviteMemberModal open={inviteModalOpen} onOpenChange={setInviteModalOpen} />

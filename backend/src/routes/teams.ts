@@ -170,6 +170,23 @@ router.delete(
   }
 );
 
+// ── GET /api/teams/:teamId/bugs ───────────────────────────────────────────────
+router.get(
+  "/:teamId/bugs",
+  requireTeamRole(),
+  async (req: Request, res: Response) => {
+    const bugs = await prisma.bugReport.findMany({
+      where: { project: { teamId: req.params.teamId } },
+      include: {
+        assignee: { select: { id: true, name: true, avatar: true } },
+        reporter: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(bugs);
+  }
+);
+
 // ── GET /api/teams/:teamId/members ────────────────────────────────────────────
 router.get(
   "/:teamId/members",

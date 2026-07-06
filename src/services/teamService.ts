@@ -10,8 +10,14 @@ export async function createTeam(name: string, organizationId: string, descripti
     });
     return { team: data, error: null };
   } catch (err: any) {
-    const error = err.response?.data?.error || "Failed to create team";
-    return { team: null, error };
+    const errorData = err.response?.data?.error;
+    let msg = err.message || "Failed to create team";
+    if (typeof errorData === "string") {
+      msg = errorData;
+    } else if (typeof errorData === "object" && errorData !== null) {
+      msg = Object.values(errorData).flat().join(", ");
+    }
+    return { team: null, error: msg };
   }
 }
 
